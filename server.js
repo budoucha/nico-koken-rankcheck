@@ -154,6 +154,7 @@ function dashboard(message = "") {
 <body>
   <main>
     <h1>貢献ランクチェッカー</h1>
+    <p class="note">対象広告主: <strong>${escapeHtml(settings.advertiserName)}</strong></p>
     ${message ? `<p class="message">${escapeHtml(message)}</p>` : ""}
     <div class="actions">
       <a class="button" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contentsを開く</a>
@@ -204,6 +205,16 @@ function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function loadSettings() {
+  const defaults = { advertiserName: "ユーザネーム未設定" };
+  if (!fs.existsSync(settingsPath)) return defaults;
+  try {
+    return { ...defaults, ...JSON.parse(fs.readFileSync(settingsPath, "utf8")) };
+  } catch {
+    return defaults;
+  }
 }
 
 function localPathFromUrl(urlPath) {

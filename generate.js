@@ -8,7 +8,15 @@ const thumbDir = path.join(assetDir, "thumbs");
 const outputHtml = path.join(projectRoot, "result.html");
 const extractedCsv = path.join(projectRoot, "result-contents.csv");
 const missingCsv = path.join(projectRoot, "result-not-in-top3.csv");
-const top3RanksPath = path.join(projectRoot, "result-top3-seiga-ranks.txt");
+function loadSettings() {
+  const defaults = { advertiserName: "ユーザネーム未設定" };
+  if (!fs.existsSync(settingsPath)) return defaults;
+  try {
+    return { ...defaults, ...JSON.parse(fs.readFileSync(settingsPath, "utf8")) };
+  } catch (error) {
+    throw new Error(`settings.json を読み込めません: ${error.message}`);
+  }
+}
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -420,6 +428,7 @@ function generateViewer(items, stats) {
     <div class="bar">
       <h1>貢献ランクチェッカー</h1>
       <div class="summary">
+        <span>対象 <strong>${escapeHtml(stats.advertiserName)}</strong></span>
         <span>全件 <strong>${stats.total}</strong></span>
         <span>3位以内 <strong>${stats.inTop3}</strong></span>
         <span>3位以内になし <strong>${stats.notInTop3}</strong></span>

@@ -1,10 +1,28 @@
 # 貢献ランクチェッカー
 
-ニコニ貢献の「貢献したコンテンツ」と「貢献成績」ページを保存したHTMLから、静画ごとに「ぶどう茶」が広告主ランキング3位以内に入っているかを確認するためのローカルツールです。
+ニコニ貢献の「貢献したコンテンツ」と「貢献成績」ページを保存したHTMLから、コンテンツごとに対象広告主がランキング3位以内に入っているかを確認するためのローカルツールです。
 
 ## 使い方
 
-### 1. サーバを起動する
+### 1. 設定ファイルを作る
+
+初回だけ、テンプレートをコピーして `settings.json` を作ります。
+
+```sh
+copy settings.template.json settings.json
+```
+
+`settings.json` の `advertiserName` に対象広告主名を書きます。
+
+```json
+{
+  "advertiserName": "自分のユーザネーム"
+}
+```
+
+`settings.json` は `.gitignore` の対象です。
+
+### 2. サーバを起動する
 
 ```sh
 node server.js
@@ -18,7 +36,7 @@ node server.js
 http://localhost:8787/
 ```
 
-### 2. 入力HTMLを保存する
+### 3. 入力HTMLを保存する
 
 サーバ画面のボタンから、それぞれのページを開きます。
 
@@ -75,6 +93,7 @@ node generate.js
 
 - `input/`
 - `assets/thumbs/`
+- `settings.json`
 - `result.html`
 - `result-*.csv`
 - `result-*.txt`
