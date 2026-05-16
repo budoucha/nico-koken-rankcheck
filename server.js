@@ -5,7 +5,21 @@ const { main: generate } = require("./generate");
 
 const root = __dirname;
 const inputDir = path.join(root, "input");
+const settingsPath = path.join(root, "settings.json");
 const port = Number(process.env.PORT || 8787);
+
+const CONTENT_TYPES = {
+  seiga: {
+    label: "静画",
+    filterLabel: "静画のみ表示",
+    urlPattern: /https:\/\/seiga\.nicovideo\.jp\/seiga\/im\d+/,
+  },
+  video: {
+    label: "動画",
+    filterLabel: "動画のみ表示",
+    urlPattern: /https:\/\/www\.nicovideo\.jp\/watch\/[a-z]{2}\d+/,
+  },
+};
 
 function send(res, status, body, contentType = "text/html; charset=utf-8") {
   res.writeHead(status, {
@@ -38,7 +52,8 @@ function serveFile(res, filePath) {
 
 function dashboard(message = "") {
   const viewerExists = fs.existsSync(path.join(root, "result.html"));
-  const inputStatus = ["contents", "reward"].map((kind) => latestInputInfo(kind));
+  const inputStatus = [latestContentsInfo(), latestInputInfo("reward")];
+  const settings = loadSettings();
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -178,7 +193,7 @@ function dashboard(message = "") {
         <p class="status">${escapeHtml(inputStatus[1])}</p>
       </form>
     </section>
-    <p class="note">保存名が同じでも問題ありません。どちらの取り込み口を使ったかで contents / reward として保存します。再生成ボタンは最新の2ファイルを使います。</p>
+    <p class="note">保存名が同じでも問題ありません。contentsはHTML内の種別を判定して保存します。再生成ボタンは各種別の最新contentsと最新rewardを使います。</p>
   </main>
 </body>
 </html>`;
@@ -197,6 +212,50 @@ function latestInputInfo(kind) {
   if (!files.length) return `${kind}: not uploaded yet`;
   const newest = files[0];
   return `${kind}: ${newest.name} (${Math.round(newest.stat.size / 1024)} KB, ${newest.stat.mtime.toLocaleString("ja-JP")})`;
+}
+
+function detectContentsType(html) {
+  const filterMatch = html.match(/<button[^>]*class="trigger"[^>]*aria-selected="true"[^>]*>([^<]+)<\/button>/);
+  const filterText = filterMatch ? stripHtml(filterMatch[1]) : "";
+  for (const [type, config] of Object.entries(CONTENT_TYPES)) {
+    if (filterText.includes(config.filterLabel) || html.includes(`class="generic-service-name">${config.label}</span>`)) {
+      return type;
+    }
+  }
+  for (const [type, config] of Object.entries(CONTENT_TYPES)) {
+    if (config.urlPattern.test(html)) return type;
+  }
+  return "";
+}
+
+function stripHtml(value) {
+  return String(value || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+}
+
+function latestContentsInfo() {
+  if (!fs.existsSync(inputDir)) return "contents: no input directory";
+  const byType = new Map();
+  for (const name of fs.readdirSync(inputDir)) {
+    if (!name.toLowerCase().startsWith("contents") || !name.toLowerCase().endsWith(".html")) continue;
+    const fullPath = path.join(inputDir, name);
+    const stat = fs.statSync(fullPath);
+    let type = (name.match(/^contents-([a-z]+)(?:-|\.html$)/i) || [])[1] || "";
+    if (!type || !CONTENT_TYPES[type]) {
+      try {
+        type = detectContentsType(fs.readFileSync(fullPath, "utf8"));
+      } catch {
+        type = "";
+      }
+    }
+    if (!type || !CONTENT_TYPES[type]) continue;
+    const current = byType.get(type);
+    if (!current || stat.mtimeMs > current.stat.mtimeMs) byType.set(type, { name, stat });
+  }
+  if (!byType.size) return "contents: not uploaded yet";
+  return [...byType.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([type, info]) => `${CONTENT_TYPES[type].label}: ${info.name} (${Math.round(info.stat.size / 1024)} KB, ${info.stat.mtime.toLocaleString("ja-JP")})`)
+    .join(" / ");
 }
 
 function escapeHtml(value) {
@@ -282,15 +341,15 @@ function validateUpload(kind, file) {
   const html = file.toString("utf8");
   if (kind === "contents") {
     const blocks = html.split('<li data-v-0f929b6d="" class="item"').length - 1;
-    const seigaLinks = (html.match(/https:\/\/seiga\.nicovideo\.jp\/seiga\/im\d+/g) || []).length;
-    if (blocks > 0 && seigaLinks > 0) return "";
-    return "contents HTMLとして静画一覧を抽出できませんでした。supporter/contents を保存したHTMLか確認してください。";
+    const detectedType = detectContentsType(html);
+    if (blocks > 0 && detectedType) return "";
+    return "contents HTMLとして一覧を抽出できませんでした。supporter/contents を保存したHTMLか確認してください。";
   }
   if (kind === "reward") {
-    const seigaTypes = (html.match(/data-type="seiga"/g) || []).length;
-    const seigaThumbs = (html.match(/lohas\.nicoseiga\.jp\/thumb\/\d+u\b/g) || []).length;
-    if (seigaTypes > 0 && seigaThumbs > 0) return "";
-    return "reward HTMLとして3位以内の静画IDを抽出できませんでした。supporter/reward を保存したHTMLか確認してください。";
+    const hasSupportedType = Object.keys(CONTENT_TYPES).some((type) => html.includes(`data-type="${type}"`));
+    const hasKnownThumb = /lohas\.nicoseiga\.jp\/thumb\/\d+u\b/.test(html) || /nicovideo\.cdn\.nimg\.jp\/thumbnails\/\d+\//.test(html);
+    if (hasSupportedType && hasKnownThumb) return "";
+    return "reward HTMLとして3位以内のコンテンツIDを抽出できませんでした。supporter/reward を保存したHTMLか確認してください。";
   }
   return "Invalid upload kind";
 }
@@ -318,7 +377,8 @@ async function handleUpload(req, res, kind) {
     return;
   }
   fs.mkdirSync(inputDir, { recursive: true });
-  const destName = `${kind}-${timestamp()}.html`;
+  const detectedType = kind === "contents" ? detectContentsType(file.toString("utf8")) : "";
+  const destName = kind === "contents" ? `${kind}-${detectedType}-${timestamp()}.html` : `${kind}-${timestamp()}.html`;
   fs.writeFileSync(path.join(inputDir, destName), file);
   send(res, 200, dashboard(`${destName} として保存しました。`));
 }

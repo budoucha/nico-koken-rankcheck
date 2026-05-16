@@ -8,6 +8,32 @@ const thumbDir = path.join(assetDir, "thumbs");
 const outputHtml = path.join(projectRoot, "result.html");
 const extractedCsv = path.join(projectRoot, "result-contents.csv");
 const missingCsv = path.join(projectRoot, "result-not-in-top3.csv");
+const top3RanksPath = path.join(projectRoot, "result-top3-ranks.txt");
+const settingsPath = path.join(projectRoot, "settings.json");
+
+const CONTENT_TYPES = {
+  seiga: {
+    label: "静画",
+    filterLabel: "静画のみ表示",
+    urlPattern: /https:\/\/seiga\.nicovideo\.jp\/seiga\/(im(\d+))/,
+    adUrl: (contentId) => `https://nicoad.nicovideo.jp/seiga/publish/${contentId}`,
+    remoteThumb: (numericId) => `https://lohas.nicoseiga.jp/thumb/${numericId}u`,
+    rewardThumbPattern: /lohas\.nicoseiga\.jp\/thumb\/(\d+)u\b/,
+  },
+  video: {
+    label: "動画",
+    filterLabel: "動画のみ表示",
+    urlPattern: /https:\/\/www\.nicovideo\.jp\/watch\/(([a-z]{2})(\d+))/,
+    adUrl: (contentId) => `https://nicoad.nicovideo.jp/video/publish/${contentId}`,
+    remoteThumb: (numericId) => `https://nicovideo.cdn.nimg.jp/thumbnails/${numericId}/${numericId}.M`,
+    rewardThumbPattern: /nicovideo\.cdn\.nimg\.jp\/thumbnails\/(\d+)\//,
+  },
+};
+
+function keyFor(type, numericId) {
+  return `${type}:${numericId}`;
+}
+
 function loadSettings() {
   const defaults = { advertiserName: "ユーザネーム未設定" };
   if (!fs.existsSync(settingsPath)) return defaults;
@@ -35,6 +61,29 @@ function latestInput(prefix) {
     throw new Error(`input/${prefix}*.html が見つかりません`);
   }
   return files[0].fullPath;
+}
+
+function latestInputsByContentType() {
+  ensureDir(inputDir);
+  const latest = new Map();
+  for (const name of fs.readdirSync(inputDir)) {
+    if (!name.toLowerCase().endsWith(".html")) continue;
+    const typeMatch = name.match(/^contents-([a-z]+)(?:-|\.html$)/i);
+    let type = typeMatch ? typeMatch[1].toLowerCase() : "";
+    const fullPath = path.join(inputDir, name);
+    if (!type && name.toLowerCase().startsWith("contents")) {
+      try {
+        type = detectContentsType(fs.readFileSync(fullPath, "utf8"));
+      } catch {
+        type = "";
+      }
+    }
+    if (!type || !CONTENT_TYPES[type]) continue;
+    const stat = fs.statSync(fullPath);
+    const current = latest.get(type);
+    if (!current || stat.mtimeMs > current.mtimeMs) latest.set(type, { type, fullPath, mtimeMs: stat.mtimeMs });
+  }
+  return [...latest.values()].sort((a, b) => a.type.localeCompare(b.type));
 }
 
 function escapeHtml(value) {
@@ -70,7 +119,26 @@ function writeCsv(filePath, header, rows) {
   fs.writeFileSync(filePath, `\uFEFF${lines.join("\r\n")}`, "utf8");
 }
 
-function extractContents(contentsHtml) {
+function detectContentsType(contentsHtml) {
+  const filterMatch = contentsHtml.match(/<button[^>]*class="trigger"[^>]*aria-selected="true"[^>]*>([^<]+)<\/button>/);
+  const filterText = filterMatch ? decodeHtmlText(filterMatch[1]) : "";
+  for (const [type, config] of Object.entries(CONTENT_TYPES)) {
+    if (filterText.includes(config.filterLabel) || contentsHtml.includes(`class="generic-service-name">${config.label}</span>`)) {
+      return type;
+    }
+  }
+  for (const [type, config] of Object.entries(CONTENT_TYPES)) {
+    if (config.urlPattern.test(contentsHtml)) return type;
+  }
+  return "";
+}
+
+function extractContents(contentsHtml, fallbackType = "") {
+  const detectedType = detectContentsType(contentsHtml) || fallbackType;
+  if (!detectedType || !CONTENT_TYPES[detectedType]) {
+    throw new Error("contents HTMLのデータ種別を判定できません");
+  }
+  const config = CONTENT_TYPES[detectedType];
   const blocks = contentsHtml.split('<li data-v-0f929b6d="" class="item"').slice(1);
   const rows = [];
   for (const part of blocks) {
@@ -78,15 +146,21 @@ function extractContents(contentsHtml) {
     const block = end >= 0 ? part.slice(0, end + 5) : part.slice(0, 10000);
     const titleMatch = block.match(/<p[^>]+class="title"[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
     if (!titleMatch) continue;
-    const contentId = (titleMatch[1].match(/im\d+/) || [""])[0];
-    if (!contentId) continue;
+    const idMatch = titleMatch[1].match(config.urlPattern);
+    if (!idMatch) continue;
+    const contentId = idMatch[1];
+    const numericId = idMatch[3] || idMatch[2];
     const hasNicoad = block.includes('data-type="nicoad"');
     rows.push({
       index: String(rows.length + 1),
+      type: detectedType,
+      typeLabel: config.label,
       title: decodeHtmlText(titleMatch[2]),
       url: titleMatch[1],
       contentId,
-      inferredNicoadUrl: hasNicoad ? `https://nicoad.nicovideo.jp/seiga/publish/${contentId}` : "",
+      numericId,
+      key: keyFor(detectedType, numericId),
+      inferredNicoadUrl: hasNicoad ? config.adUrl(contentId) : "",
     });
   }
   return rows.slice(0, 500);
@@ -101,59 +175,75 @@ function detectRank(itemHtml) {
   return 0;
 }
 
-function extractTop3SeigaRanks(rewardHtml) {
+function extractTop3Ranks(rewardHtml) {
   const ranks = new Map();
   const itemRegex = /<li\b[^>]*class="item"[\s\S]*?<\/li>/g;
   let match;
   while ((match = itemRegex.exec(rewardHtml)) !== null) {
     const item = match[0];
-    if (!item.includes('data-type="seiga"')) continue;
-    const thumb = item.match(/lohas\.nicoseiga\.jp\/thumb\/(\d+)u\b/);
+    let detectedType = "";
+    let numericId = "";
+    for (const [type, config] of Object.entries(CONTENT_TYPES)) {
+      if (!item.includes(`data-type="${type}"`)) continue;
+      const thumb = item.match(config.rewardThumbPattern);
+      if (!thumb) continue;
+      detectedType = type;
+      numericId = thumb[1];
+      break;
+    }
     const rank = detectRank(item);
-    if (thumb && rank) ranks.set(`im${thumb[1]}`, rank);
+    if (detectedType && numericId && rank) ranks.set(keyFor(detectedType, numericId), rank);
   }
   return ranks;
 }
 
-function findLocalThumbnailSource(contentsPath, contentId) {
+function findLocalThumbnailSource(contentsPath, item) {
   const baseName = path.basename(contentsPath, path.extname(contentsPath));
   const candidatesDirs = [
     path.join(path.dirname(contentsPath), `${baseName}_files`),
     path.join(path.dirname(contentsPath), `${baseName}.files`),
   ];
-  const numericId = contentId.replace(/^im/, "");
-  const fileCandidates = [`${numericId}u`, `${numericId}.jpg`, `${numericId}.png`, `${numericId}`];
+  const numericId = item.numericId;
+  const fileCandidates = item.type === "video"
+    ? [`${numericId}.M`, `${numericId}.jpg`, `${numericId}.png`, `${numericId}`]
+    : [`${numericId}u`, `${numericId}.jpg`, `${numericId}.png`, `${numericId}`];
   for (const dir of candidatesDirs) {
     if (!fs.existsSync(dir)) continue;
+    const files = fs.readdirSync(dir);
     for (const fileName of fileCandidates) {
       const source = path.join(dir, fileName);
       if (fs.existsSync(source) && fs.statSync(source).isFile()) return source;
+    }
+    if (item.type === "video") {
+      const sourceName = files.find((name) => name.startsWith(`${numericId}.`) && /\.(M|jpg|png|webp)$/i.test(name));
+      if (sourceName) return path.join(dir, sourceName);
     }
   }
   return "";
 }
 
-function thumbnailFor(contentsPath, contentId) {
-  const source = findLocalThumbnailSource(contentsPath, contentId);
+function thumbnailFor(contentsPath, item) {
+  const source = findLocalThumbnailSource(contentsPath, item);
   if (source) {
     const ext = path.extname(source) || ".jpg";
-    const destName = `${contentId}${ext}`;
+    const destName = `${item.type}-${item.numericId}${ext}`;
     const dest = path.join(thumbDir, destName);
     fs.copyFileSync(source, dest);
     return `assets/thumbs/${destName}`;
   }
-  return `https://lohas.nicoseiga.jp/thumb/${contentId.replace(/^im/, "")}u`;
+  return CONTENT_TYPES[item.type].remoteThumb(item.numericId);
 }
 
 function generateViewer(items, stats) {
   const cards = items.map((item) => `
-        <article class="card" data-in-top3="${item.inTop3 ? "true" : "false"}" data-rank="${item.rank || 0}" data-index="${escapeHtml(item.index)}" data-title="${escapeHtml(item.title.toLowerCase())}" data-id="${escapeHtml(item.contentId.toLowerCase())}">
+        <article class="card" data-type="${escapeHtml(item.type)}" data-in-top3="${item.inTop3 ? "true" : "false"}" data-rank="${item.rank || 0}" data-index="${escapeHtml(item.globalIndex)}" data-title="${escapeHtml(item.title.toLowerCase())}" data-id="${escapeHtml(item.contentId.toLowerCase())}">
           <a class="thumb-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(item.title)}を開く">
             <img class="thumb" src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy">
           </a>
           <div class="content">
             <div class="meta">
               <span class="index">#${escapeHtml(item.index)}</span>
+              <span class="type-badge">${escapeHtml(item.typeLabel)}</span>
               <span class="status ${item.inTop3 ? "ok" : "missing"}">${item.inTop3 ? "3位以内" : "3位以内になし"}</span>
               ${item.rank ? `<span class="rank-badge rank-${item.rank}">${item.rank}位</span>` : ""}
             </div>
@@ -161,7 +251,7 @@ function generateViewer(items, stats) {
             <p class="id">${escapeHtml(item.contentId)}</p>
             <div class="actions">
               <a class="button primary" href="${escapeHtml(item.nicoadUrl)}" target="_blank" rel="noopener noreferrer">広告画面</a>
-              <a class="button" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">静画</a>
+              <a class="button" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.typeLabel)}</a>
             </div>
           </div>
         </article>`).join("\n");
@@ -256,6 +346,9 @@ function generateViewer(items, stats) {
       overflow: hidden;
       background: var(--panel);
     }
+    .type-filter {
+      grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+    }
     .segmented button {
       min-height: 38px;
       border: 0;
@@ -348,6 +441,14 @@ function generateViewer(items, stats) {
       padding: 2px 8px;
       font-size: 12px;
       font-weight: 700;
+    }
+    .type-badge {
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #29414c;
+      background: #e7eef2;
     }
     .status.ok {
       color: var(--ok);
@@ -452,6 +553,10 @@ function generateViewer(items, stats) {
         <button type="button" data-filter="rank2" aria-pressed="false">2位</button>
         <button type="button" data-filter="rank1" aria-pressed="false">1位</button>
       </div>
+      <div class="segmented type-filter" aria-label="データ種別フィルタ">
+        <button type="button" data-type-filter="all" aria-pressed="true">全種別</button>
+        ${stats.contentTypes.map((entry) => `<button type="button" data-type-filter="${escapeHtml(entry.type)}" aria-pressed="false">${escapeHtml(entry.label)}</button>`).join("")}
+      </div>
       <select id="sort">
         <option value="index">元の順番</option>
         <option value="rank">順位順</option>
@@ -467,12 +572,14 @@ ${cards}
   </main>
   <script>
     const buttons = [...document.querySelectorAll("[data-filter]")];
+    const typeButtons = [...document.querySelectorAll("[data-type-filter]")];
     const cards = [...document.querySelectorAll(".card")];
     const grid = document.querySelector("#grid");
     const search = document.querySelector("#search");
     const sort = document.querySelector("#sort");
     const count = document.querySelector("#visible-count");
     let activeFilter = "missing";
+    let activeTypeFilter = "all";
 
     function applySort() {
       const sorted = [...cards].sort((a, b) => {
@@ -495,6 +602,7 @@ ${cards}
       for (const card of cards) {
         const inTop3 = card.dataset.inTop3 === "true";
         const rank = Number(card.dataset.rank);
+        const typeMatch = activeTypeFilter === "all" || card.dataset.type === activeTypeFilter;
         const filterMatch =
           activeFilter === "all" ||
           (activeFilter === "top3" && inTop3) ||
@@ -506,7 +614,7 @@ ${cards}
           query === "" ||
           card.dataset.title.includes(query) ||
           card.dataset.id.includes(query);
-        const show = filterMatch && textMatch;
+        const show = typeMatch && filterMatch && textMatch;
         card.classList.toggle("hidden", !show);
         if (show) visible += 1;
       }
@@ -517,6 +625,13 @@ ${cards}
       button.addEventListener("click", () => {
         activeFilter = button.dataset.filter;
         buttons.forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+        applyFilter();
+      });
+    });
+    typeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        activeTypeFilter = button.dataset.typeFilter;
+        typeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
         applyFilter();
       });
     });
@@ -543,20 +658,30 @@ function main() {
   ensureDir(inputDir);
   ensureDir(thumbDir);
 
-  const contentsPath = latestInput("contents");
+  const contentInputs = latestInputsByContentType();
+  if (!contentInputs.length) {
+    throw new Error("input/ に有効な contents HTML が見つかりません");
+  }
   const rewardPath = latestInput("reward");
-  const contentsHtml = fs.readFileSync(contentsPath, "utf8");
   const rewardHtml = fs.readFileSync(rewardPath, "utf8");
 
-  const contentsRows = extractContents(contentsHtml);
-  const top3Ranks = extractTop3SeigaRanks(rewardHtml);
-  const items = contentsRows.map((row) => {
-    const rank = top3Ranks.get(row.contentId) || 0;
+  const contentsRows = [];
+  for (const input of contentInputs) {
+    const html = fs.readFileSync(input.fullPath, "utf8");
+    contentsRows.push(...extractContents(html, input.type).map((row) => ({
+      ...row,
+      sourcePath: input.fullPath,
+    })));
+  }
+  const top3Ranks = extractTop3Ranks(rewardHtml);
+  const items = contentsRows.map((row, index) => {
+    const rank = top3Ranks.get(row.key) || 0;
     const inTop3 = rank > 0;
     return {
       ...row,
-      nicoadUrl: row.inferredNicoadUrl || `https://nicoad.nicovideo.jp/seiga/publish/${row.contentId}`,
-      thumbnail: thumbnailFor(contentsPath, row.contentId),
+      globalIndex: String(index + 1),
+      nicoadUrl: row.inferredNicoadUrl || CONTENT_TYPES[row.type].adUrl(row.contentId),
+      thumbnail: thumbnailFor(row.sourcePath, row),
       rank,
       inTop3,
     };
@@ -567,28 +692,33 @@ function main() {
       index: item.index,
       title: item.title,
       url: item.url,
+      type: item.type,
+      typeLabel: item.typeLabel,
       contentId: item.contentId,
+      numericId: item.numericId,
       inferredNicoadUrl: item.nicoadUrl,
     }));
 
-  writeCsv(extractedCsv, ["index", "title", "url", "contentId", "inferredNicoadUrl"], contentsRows);
-  writeCsv(missingCsv, ["index", "title", "url", "contentId", "inferredNicoadUrl"], missingRows);
+  writeCsv(extractedCsv, ["index", "type", "typeLabel", "title", "url", "contentId", "numericId", "key", "inferredNicoadUrl"], contentsRows);
+  writeCsv(missingCsv, ["index", "type", "typeLabel", "title", "url", "contentId", "numericId", "inferredNicoadUrl"], missingRows);
   fs.writeFileSync(top3RanksPath, [...top3Ranks.entries()].sort().map(([id, rank]) => `${id},${rank}`).join("\r\n"), "utf8");
 
   const stats = {
+    advertiserName: loadSettings().advertiserName,
     total: items.length,
     inTop3: items.filter((item) => item.inTop3).length,
     notInTop3: missingRows.length,
-    contentsPath,
+    contentsPath: contentInputs.map((input) => input.fullPath).join(", "),
+    contentTypes: contentInputs.map((input) => ({ type: input.type, label: CONTENT_TYPES[input.type].label })),
     rewardPath,
   };
   fs.writeFileSync(outputHtml, generateViewer(items, stats), "utf8");
 
   return {
-    contentsPath,
+    contentsPaths: contentInputs.map((input) => input.fullPath),
     rewardPath,
     total: stats.total,
-    top3SeigaIds: top3Ranks.size,
+    top3RankedItems: top3Ranks.size,
     inTop3: stats.inTop3,
     notInTop3: stats.notInTop3,
     outputHtml,
