@@ -1,0 +1,12 @@
+input/
+assets/thumbs/
+
+result.html
+result-*.csv
+result-*.txt
+
+# Legacy generated names from early local runs.
+seiga_top3_viewer.html
+contents_extracted.csv
+seiga_not_in_top3.csv
+top3_seiga_ids.txt

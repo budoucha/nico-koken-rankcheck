@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>貢献ランクチェッカー</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f6f7f8;
+      color: #1f2529;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(720px, calc(100vw - 32px));
+      padding: 24px;
+      border: 1px solid #dce2e6;
+      border-radius: 8px;
+      background: #fff;
+    }
+    h1 { margin: 0 0 16px; font-size: 22px; letter-spacing: 0; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .upload-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .upload-card {
+      border: 1px solid #dce2e6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fafbfb;
+    }
+    .upload-card h2 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+    .upload-card input {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    form { margin: 0; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid #dce2e6;
+      border-radius: 8px;
+      color: #1f2529;
+      background: #fff;
+      text-decoration: none;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .button.primary {
+      border-color: #0a7c7b;
+      background: #0a7c7b;
+      color: #fff;
+    }
+    p { color: #69757d; font-size: 13px; line-height: 1.6; }
+    @media (max-width: 640px) {
+      .upload-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>貢献ランクチェッカー</h1>
+    <div class="actions">
+      <a class="button" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contentsを開く</a>
+      <a class="button" href="https://koken.nicovideo.jp/supporter/reward" target="_blank" rel="noopener noreferrer">rewardを開く</a>
+      <form id="generate-form" method="post" action="/generate">
+        <button class="button primary" type="submit">HTMLを再生成</button>
+      </form>
+    </div>
+    <section class="upload-grid">
+      <form class="upload-card" method="post" action="/upload?kind=contents" enctype="multipart/form-data">
+        <h2>contents HTMLを取り込む</h2>
+        <input type="file" name="html" accept=".html,text/html" required>
+        <button class="button" type="submit">contentsとして保存</button>
+      </form>
+      <form class="upload-card" method="post" action="/upload?kind=reward" enctype="multipart/form-data">
+        <h2>reward HTMLを取り込む</h2>
+        <input type="file" name="html" accept=".html,text/html" required>
+        <button class="button" type="submit">rewardとして保存</button>
+      </form>
+    </section>
+    <p>再生成ボタンは `node server.js` で http://localhost:8787/ から開いた場合に動作します。</p>
+  </main>
+  <script>
+    if (location.protocol === "file:") {
+      document.querySelector("#generate-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        alert("再生成にはローカルサーバーが必要です。node server.js を実行して http://localhost:8787/ を開いてください。");
+      });
+    }
+  </script>
+</body>
+</html>
