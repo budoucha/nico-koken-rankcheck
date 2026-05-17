@@ -478,7 +478,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === "POST" && req.url === "/generate") {
-      const result = generate();
+      const result = await generate();
       res.writeHead(303, { Location: "/result.html" });
       res.end(JSON.stringify(result));
       return;

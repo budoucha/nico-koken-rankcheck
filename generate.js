@@ -1,4 +1,5 @@
 const fs = require("fs");
+const https = require("https");
 const path = require("path");
 
 const projectRoot = __dirname;
@@ -141,6 +142,11 @@ function extractTotalContribution(itemHtml) {
   return numberMatch ? numberMatch[0].replace(/\s+/g, "") : "";
 }
 
+function extractThumbnailSrc(itemHtml) {
+  const thumbMatch = itemHtml.match(/<img[^>]+class="thumbnail-image"[^>]+src="([^"]+)"/);
+  return thumbMatch ? decodeHtmlText(thumbMatch[1]) : "";
+}
+
 function extractContents(contentsHtml, fallbackType = "") {
   const detectedType = detectContentsType(contentsHtml) || fallbackType;
   if (!detectedType || !CONTENT_TYPES[detectedType]) {
@@ -160,6 +166,7 @@ function extractContents(contentsHtml, fallbackType = "") {
     const numericId = idMatch[3] || idMatch[2];
     const hasNicoad = block.includes('data-type="nicoad"');
     const totalContribution = extractTotalContribution(block);
+    const thumbnailSrc = extractThumbnailSrc(block);
     rows.push({
       index: String(rows.length + 1),
       type: detectedType,
@@ -169,6 +176,7 @@ function extractContents(contentsHtml, fallbackType = "") {
       contentId,
       numericId,
       totalContribution,
+      thumbnailSrc,
       key: keyFor(detectedType, numericId),
       inferredNicoadUrl: hasNicoad ? config.adUrl(contentId) : "",
     });
@@ -208,6 +216,10 @@ function extractTop3Ranks(rewardHtml) {
 }
 
 function findLocalThumbnailSource(contentsPath, item) {
+  if (item.thumbnailSrc) {
+    const localSource = localThumbnailSourceFromSrc(contentsPath, item.thumbnailSrc);
+    if (localSource) return localSource;
+  }
   const baseName = path.basename(contentsPath, path.extname(contentsPath));
   const candidatesDirs = [
     path.join(path.dirname(contentsPath), `${baseName}_files`),
@@ -232,16 +244,82 @@ function findLocalThumbnailSource(contentsPath, item) {
   return "";
 }
 
-function thumbnailFor(contentsPath, item) {
+function localThumbnailSourceFromSrc(contentsPath, thumbnailSrc) {
+  if (/^https?:\/\//i.test(thumbnailSrc) || /^data:/i.test(thumbnailSrc)) return "";
+  const cleanSrc = thumbnailSrc.split(/[?#]/)[0].replace(/\\/g, "/");
+  const decoded = decodeURIComponent(cleanSrc);
+  const fullPath = path.resolve(path.dirname(contentsPath), decoded);
+  const inputRoot = path.resolve(inputDir);
+  if (!fullPath.startsWith(inputRoot + path.sep) && fullPath !== inputRoot) return "";
+  return fs.existsSync(fullPath) && fs.statSync(fullPath).isFile() ? fullPath : "";
+}
+
+function imageExtensionFor(filePath) {
+  const bytes = fs.readFileSync(filePath);
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return ".jpg";
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return ".png";
+  if (bytes.length >= 12 && bytes.slice(0, 4).toString("ascii") === "RIFF" && bytes.slice(8, 12).toString("ascii") === "WEBP") return ".webp";
+  return path.extname(filePath) || ".jpg";
+}
+
+const videoThumbnailUrlCache = new Map();
+
+function fetchText(url, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { "User-Agent": "koken-rank-checker/1.0" } }, (res) => {
+      if (res.statusCode < 200 || res.statusCode >= 300) {
+        res.resume();
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      const chunks = [];
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve(chunks.join("")));
+    });
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error("request timed out"));
+    });
+    req.on("error", reject);
+  });
+}
+
+async function fetchVideoThumbnailUrl(contentId) {
+  if (videoThumbnailUrlCache.has(contentId)) return videoThumbnailUrlCache.get(contentId);
+  const url = `https://ext.nicovideo.jp/api/getthumbinfo/${encodeURIComponent(contentId)}`;
+  try {
+    const xml = await fetchText(url);
+    const match = xml.match(/<thumbnail_url>([\s\S]*?)<\/thumbnail_url>/);
+    const thumbnailUrl = match ? decodeHtmlText(match[1]) : "";
+    videoThumbnailUrlCache.set(contentId, thumbnailUrl);
+    return thumbnailUrl;
+  } catch {
+    videoThumbnailUrlCache.set(contentId, "");
+    return "";
+  }
+}
+
+async function thumbnailFor(contentsPath, item) {
+  const localOrSaved = thumbnailForLocalOrSaved(contentsPath, item);
+  if (localOrSaved) return localOrSaved;
+  if (item.type === "video") {
+    const remoteUrl = await fetchVideoThumbnailUrl(item.contentId);
+    if (remoteUrl) return remoteUrl;
+  }
+  return CONTENT_TYPES[item.type].remoteThumb(item.numericId);
+}
+
+function thumbnailForLocalOrSaved(contentsPath, item) {
   const source = findLocalThumbnailSource(contentsPath, item);
   if (source) {
-    const ext = path.extname(source) || ".jpg";
+    const ext = imageExtensionFor(source);
     const destName = `${item.type}-${item.numericId}${ext}`;
     const dest = path.join(thumbDir, destName);
     fs.copyFileSync(source, dest);
     return `assets/thumbs/${destName}`;
   }
-  return CONTENT_TYPES[item.type].remoteThumb(item.numericId);
+  if (item.thumbnailSrc && /^https?:\/\//i.test(item.thumbnailSrc)) return item.thumbnailSrc;
+  return "";
 }
 
 function generateViewer(items, stats) {
@@ -699,7 +777,7 @@ ${cards}
 </html>`;
 }
 
-function main() {
+async function main() {
   ensureDir(inputDir);
   ensureDir(thumbDir);
 
@@ -719,18 +797,18 @@ function main() {
     })));
   }
   const top3Ranks = extractTop3Ranks(rewardHtml);
-  const items = contentsRows.map((row, index) => {
+  const items = await Promise.all(contentsRows.map(async (row, index) => {
     const rank = top3Ranks.get(row.key) || 0;
     const inTop3 = rank > 0;
     return {
       ...row,
       globalIndex: String(index + 1),
       nicoadUrl: row.inferredNicoadUrl || CONTENT_TYPES[row.type].adUrl(row.contentId),
-      thumbnail: thumbnailFor(row.sourcePath, row),
+      thumbnail: await thumbnailFor(row.sourcePath, row),
       rank,
       inTop3,
     };
-  });
+  }));
   const missingRows = items
     .filter((item) => !item.inTop3)
     .map((item) => ({
@@ -775,7 +853,14 @@ function main() {
 }
 
 if (require.main === module) {
-  console.log(JSON.stringify(main(), null, 2));
+  main()
+    .then((result) => {
+      console.log(JSON.stringify(result, null, 2));
+    })
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
 }
 
 module.exports = { main };
