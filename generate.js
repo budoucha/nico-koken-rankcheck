@@ -133,6 +133,14 @@ function detectContentsType(contentsHtml) {
   return "";
 }
 
+function extractTotalContribution(itemHtml) {
+  const contributionMatch = itemHtml.match(/class="total-contribution"[\s\S]*?<strong[^>]*class="value"[^>]*>([\s\S]*?)<\/strong>/);
+  if (!contributionMatch) return "";
+  const text = decodeHtmlText(contributionMatch[1].replace(/<svg[\s\S]*?<\/svg>/g, ""));
+  const numberMatch = text.match(/[0-9][0-9,\s]*/);
+  return numberMatch ? numberMatch[0].replace(/\s+/g, "") : "";
+}
+
 function extractContents(contentsHtml, fallbackType = "") {
   const detectedType = detectContentsType(contentsHtml) || fallbackType;
   if (!detectedType || !CONTENT_TYPES[detectedType]) {
@@ -151,6 +159,7 @@ function extractContents(contentsHtml, fallbackType = "") {
     const contentId = idMatch[1];
     const numericId = idMatch[3] || idMatch[2];
     const hasNicoad = block.includes('data-type="nicoad"');
+    const totalContribution = extractTotalContribution(block);
     rows.push({
       index: String(rows.length + 1),
       type: detectedType,
@@ -159,6 +168,7 @@ function extractContents(contentsHtml, fallbackType = "") {
       url: titleMatch[1],
       contentId,
       numericId,
+      totalContribution,
       key: keyFor(detectedType, numericId),
       inferredNicoadUrl: hasNicoad ? config.adUrl(contentId) : "",
     });
@@ -249,6 +259,7 @@ function generateViewer(items, stats) {
             </div>
             <h2><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a></h2>
             <p class="id">${escapeHtml(item.contentId)}</p>
+            ${item.totalContribution ? `<p class="contribution"><span class="contribution-label">獲得</span><strong>${escapeHtml(item.totalContribution)}</strong><span class="contribution-unit">貢</span></p>` : ""}
             <div class="actions">
               <a class="button primary" href="${escapeHtml(item.nicoadUrl)}" target="_blank" rel="noopener noreferrer">広告する<svg class="external-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path></svg></a>
             </div>
@@ -426,6 +437,7 @@ function generateViewer(items, stats) {
     .content { min-width: 0; }
     .meta {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       align-items: center;
       margin-bottom: 4px;
@@ -485,6 +497,27 @@ function generateViewer(items, stats) {
       color: var(--muted);
       font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
       font-size: 13px;
+    }
+    .contribution {
+      display: flex;
+      align-items: baseline;
+      gap: 5px;
+      margin: -4px 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .contribution strong {
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0;
+    }
+    .contribution-label,
+    .contribution-unit {
+      color: var(--muted);
+      font-weight: 650;
     }
     .actions {
       display: flex;
@@ -708,11 +741,12 @@ function main() {
       typeLabel: item.typeLabel,
       contentId: item.contentId,
       numericId: item.numericId,
+      totalContribution: item.totalContribution,
       inferredNicoadUrl: item.nicoadUrl,
     }));
 
-  writeCsv(extractedCsv, ["index", "type", "typeLabel", "title", "url", "contentId", "numericId", "key", "inferredNicoadUrl"], contentsRows);
-  writeCsv(missingCsv, ["index", "type", "typeLabel", "title", "url", "contentId", "numericId", "inferredNicoadUrl"], missingRows);
+  writeCsv(extractedCsv, ["index", "type", "typeLabel", "title", "url", "contentId", "numericId", "totalContribution", "key", "inferredNicoadUrl"], contentsRows);
+  writeCsv(missingCsv, ["index", "type", "typeLabel", "title", "url", "contentId", "numericId", "totalContribution", "inferredNicoadUrl"], missingRows);
   fs.writeFileSync(top3RanksPath, [...top3Ranks.entries()].sort().map(([id, rank]) => `${id},${rank}`).join("\r\n"), "utf8");
 
   const stats = {
