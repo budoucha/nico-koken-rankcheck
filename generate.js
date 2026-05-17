@@ -244,14 +244,13 @@ function generateViewer(items, stats) {
             <div class="meta">
               <span class="index">#${escapeHtml(item.index)}</span>
               <span class="type-badge">${escapeHtml(item.typeLabel)}</span>
-              <span class="status ${item.inTop3 ? "ok" : "missing"}">${item.inTop3 ? "3位以内" : "3位以内になし"}</span>
+              <span class="status ${item.inTop3 ? "ok" : "missing"}">${item.inTop3 ? "3位以内" : "4位以下"}</span>
               ${item.rank ? `<span class="rank-badge rank-${item.rank}">${item.rank}位</span>` : ""}
             </div>
             <h2><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a></h2>
             <p class="id">${escapeHtml(item.contentId)}</p>
             <div class="actions">
-              <a class="button primary" href="${escapeHtml(item.nicoadUrl)}" target="_blank" rel="noopener noreferrer">広告画面</a>
-              <a class="button" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.typeLabel)}</a>
+              <a class="button primary" href="${escapeHtml(item.nicoadUrl)}" target="_blank" rel="noopener noreferrer">広告する<svg class="external-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path></svg></a>
             </div>
           </div>
         </article>`).join("\n");
@@ -496,6 +495,7 @@ function generateViewer(items, stats) {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      gap: 6px;
       min-height: 34px;
       padding: 0 12px;
       border: 1px solid var(--line);
@@ -510,6 +510,16 @@ function generateViewer(items, stats) {
       border-color: var(--accent);
       background: var(--accent);
       color: #fff;
+    }
+    .external-icon {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
     }
     .hidden { display: none; }
     @media (max-width: 720px) {
@@ -532,14 +542,14 @@ function generateViewer(items, stats) {
         <span>対象 <strong>${escapeHtml(stats.advertiserName)}</strong></span>
         <span>全件 <strong>${stats.total}</strong></span>
         <span>3位以内 <strong>${stats.inTop3}</strong></span>
-        <span>3位以内になし <strong>${stats.notInTop3}</strong></span>
+        <span>4位以下 <strong>${stats.notInTop3}</strong></span>
       </div>
       <div class="source">contents: ${escapeHtml(path.basename(stats.contentsPath))} / reward: ${escapeHtml(path.basename(stats.rewardPath))}</div>
       <div class="top-actions">
-        <a class="button" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contentsを開く</a>
-        <a class="button" href="https://koken.nicovideo.jp/supporter/reward" target="_blank" rel="noopener noreferrer">rewardを開く</a>
+        <a class="button" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contentsを開く<svg class="external-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path></svg></a>
+        <a class="button" href="https://koken.nicovideo.jp/supporter/reward" target="_blank" rel="noopener noreferrer">rewardを開く<svg class="external-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path></svg></a>
         <form id="generate-form" method="post" action="/generate">
-          <button class="button primary" type="submit">HTMLを再生成</button>
+          <button class="button primary" type="submit">分析する</button>
         </form>
         <a class="button" href="/" id="server-home">入力ファイルを取り込む</a>
       </div>
@@ -559,7 +569,8 @@ function generateViewer(items, stats) {
       </div>
       <select id="sort">
         <option value="index">元の順番</option>
-        <option value="rank">順位順</option>
+        <option value="rank-asc">順位が高い順</option>
+        <option value="rank-desc">順位が低い順</option>
       </select>
       <input id="search" type="search" placeholder="タイトルまたはIDで検索">
     </div>
@@ -583,12 +594,13 @@ ${cards}
 
     function applySort() {
       const sorted = [...cards].sort((a, b) => {
-        if (sort.value === "rank") {
+        if (sort.value === "rank-asc" || sort.value === "rank-desc") {
           const ar = Number(a.dataset.rank);
           const br = Number(b.dataset.rank);
-          const av = ar || 99;
-          const bv = br || 99;
-          if (av !== bv) return av - bv;
+          if (ar && br && ar !== br) {
+            return sort.value === "rank-asc" ? ar - br : br - ar;
+          }
+          if (ar !== br) return ar ? -1 : 1;
         }
         return Number(a.dataset.index) - Number(b.dataset.index);
       });

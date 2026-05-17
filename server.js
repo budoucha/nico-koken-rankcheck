@@ -53,7 +53,9 @@ function serveFile(res, filePath) {
 function dashboard(message = "") {
   const viewerExists = fs.existsSync(path.join(root, "result.html"));
   const inputStatus = [latestContentsInfo(), latestInputInfo("reward")];
+  const settingsExists = fs.existsSync(settingsPath);
   const settings = loadSettings();
+  const externalIcon = `<svg class="external-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path></svg>`;
   return `<!doctype html>
 <html lang="ja">
 <head>
@@ -68,6 +70,7 @@ function dashboard(message = "") {
       --muted: #69757d;
       --line: #dce2e6;
       --accent: #0a7c7b;
+      --danger: #c62828;
     }
     * { box-sizing: border-box; }
     body {
@@ -113,6 +116,7 @@ function dashboard(message = "") {
       font: inherit;
       font-weight: 650;
       cursor: pointer;
+      gap: 6px;
     }
     .button.primary {
       border-color: var(--accent);
@@ -122,6 +126,57 @@ function dashboard(message = "") {
     .note {
       margin: 0;
       color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .advertiser-line {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .advertiser-line.missing {
+      color: var(--danger);
+    }
+    .tips {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+    .tips summary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      list-style: none;
+    }
+    .tips summary::-webkit-details-marker {
+      display: none;
+    }
+    .tips[open] .tips-body {
+      display: block;
+    }
+    .tips-body {
+      display: none;
+      position: absolute;
+      z-index: 1;
+      top: calc(100% + 6px);
+      left: 0;
+      width: min(360px, calc(100vw - 48px));
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      box-shadow: 0 6px 18px rgba(20, 30, 40, .14);
       font-size: 13px;
       line-height: 1.6;
     }
@@ -151,9 +206,29 @@ function dashboard(message = "") {
       font-size: 15px;
       letter-spacing: 0;
     }
+    .upload-card .button {
+      margin-bottom: 10px;
+    }
+    .upload-help {
+      margin: 0 0 10px;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
     .upload-card input {
       width: 100%;
       margin-bottom: 10px;
+    }
+    .external-icon {
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
     }
     .status {
       margin: 10px 0 0;
@@ -169,31 +244,40 @@ function dashboard(message = "") {
 <body>
   <main>
     <h1>貢献ランクチェッカー</h1>
-    <p class="note">対象広告主: <strong>${escapeHtml(settings.advertiserName)}</strong></p>
+    <div class="note advertiser-line${settingsExists ? "" : " missing"}">対象広告主: <strong>${escapeHtml(settings.advertiserName)}</strong>${settingsExists ? "" : `<details class="tips"><summary aria-label="settings.jsonの作り方">?</summary><span class="tips-body">settings.template.json をコピーして settings.json を作成し、advertiserName に対象広告主名を入力してください。</span></details>`}</div>
     ${message ? `<p class="message">${escapeHtml(message)}</p>` : ""}
     <div class="actions">
-      <a class="button" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contentsを開く</a>
-      <a class="button" href="https://koken.nicovideo.jp/supporter/reward" target="_blank" rel="noopener noreferrer">rewardを開く</a>
       <form method="post" action="/generate">
-        <button class="button primary" type="submit">HTMLを再生成</button>
+        <button class="button primary" type="submit">分析する</button>
       </form>
-      ${viewerExists ? `<a class="button" href="/result.html">現在のHTMLを見る</a>` : ""}
+      ${viewerExists ? `<a class="button" href="/result.html">分析結果を見る</a>` : ""}
     </div>
     <section class="upload-grid">
       <form class="upload-card" method="post" action="/upload?kind=contents" enctype="multipart/form-data">
         <h2>contents HTMLを取り込む</h2>
+        <a class="button" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contentsを開く${externalIcon}</a>
+        <ul class="upload-help">
+          <li>contents のページをファイルとして保存し、ここに入力してください。</li>
+          <li>対象ページでリストを必要な長さだけ読み込んでから保存してください。</li>
+          <li>コンテンツ種別は単一種別（「動画のみ」や「静画のみ」）に限定してください。</li>
+        </ul>
         <input type="file" name="html" accept=".html,text/html" required>
         <button class="button" type="submit">contentsとして保存</button>
         <p class="status">${escapeHtml(inputStatus[0])}</p>
       </form>
       <form class="upload-card" method="post" action="/upload?kind=reward" enctype="multipart/form-data">
         <h2>reward HTMLを取り込む</h2>
+        <a class="button" href="https://koken.nicovideo.jp/supporter/reward" target="_blank" rel="noopener noreferrer">rewardを開く${externalIcon}</a>
+        <ul class="upload-help">
+          <li>reward のページをファイルとして保存し、ここに入力してください。</li>
+          <li>対象ページでリストを必要な長さだけ読み込んでから保存してください。</li>
+        </ul>
         <input type="file" name="html" accept=".html,text/html" required>
         <button class="button" type="submit">rewardとして保存</button>
         <p class="status">${escapeHtml(inputStatus[1])}</p>
       </form>
     </section>
-    <p class="note">保存名が同じでも問題ありません。contentsはHTML内の種別を判定して保存します。再生成ボタンは各種別の最新contentsと最新rewardを使います。</p>
+    <p class="note">contentsはコンテンツ種別を自動判定して保存します。結果画面の生成には各種別の最新contentsそして最新rewardを使います。</p>
   </main>
 </body>
 </html>`;
