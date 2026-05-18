@@ -414,6 +414,51 @@ function generateViewer(items, stats) {
     .top-actions .button {
       min-height: 38px;
     }
+    .mobile-controls-toggle {
+      display: none;
+      margin-top: 12px;
+      width: 100%;
+      min-height: 38px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0;
+    }
+    .mobile-controls-toggle::after {
+      content: "∨";
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1;
+    }
+    header.controls-open .mobile-controls-toggle::after {
+      content: "∧";
+    }
+    .mobile-controls-toggle-main {
+      display: flex;
+      min-width: 0;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .mobile-controls-label {
+      flex: 0 0 auto;
+      color: var(--text);
+    }
+    .mobile-controls-summary {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--muted);
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .controls {
       max-width: 1180px;
       margin: 0 auto;
@@ -628,6 +673,23 @@ function generateViewer(items, stats) {
     }
     .hidden { display: none; }
     @media (max-width: 720px) {
+      .bar { padding: 12px 14px; }
+      h1 { font-size: 18px; }
+      .summary { gap: 4px 8px; }
+      .source { display: none; }
+      .top-actions {
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .top-actions .button {
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: 13px;
+      }
+      .mobile-controls-toggle {
+        display: flex;
+      }
+      header:not(.controls-open) .controls { display: none; }
       .controls { grid-template-columns: 1fr; }
       .segmented { grid-template-columns: 1fr; }
       .segmented button {
@@ -658,8 +720,14 @@ function generateViewer(items, stats) {
         </form>
         <a class="button" href="/" id="server-home">入力ファイルを取り込む</a>
       </div>
+      <button class="mobile-controls-toggle" type="button" id="controls-toggle" aria-controls="result-controls" aria-expanded="false">
+        <span class="mobile-controls-toggle-main">
+          <span class="mobile-controls-label">絞り込み</span>
+          <span class="mobile-controls-summary" id="controls-summary"></span>
+        </span>
+      </button>
     </div>
-    <div class="controls">
+    <div class="controls" id="result-controls">
       <div class="segmented" aria-label="表示フィルタ">
         <button type="button" data-filter="missing" aria-pressed="true">4位以下</button>
         <button type="button" data-filter="all" aria-pressed="false">すべて</button>
@@ -697,6 +765,9 @@ ${cards}
     const count = document.querySelector("#visible-count");
     const copyButton = document.querySelector("#copy-spreadsheet");
     const copyStatus = document.querySelector("#copy-status");
+    const pageHeader = document.querySelector("header");
+    const controlsToggle = document.querySelector("#controls-toggle");
+    const controlsSummary = document.querySelector("#controls-summary");
     let activeFilter = "missing";
     let activeTypeFilter = "all";
     let copyStatusTimer = 0;
@@ -767,6 +838,24 @@ ${cards}
       sorted.forEach((card) => grid.appendChild(card));
     }
 
+    function selectedButtonText(items, dataKey, value) {
+      const selected = items.find((button) => button.dataset[dataKey] === value);
+      return selected ? selected.textContent.trim() : "";
+    }
+
+    function updateControlsSummary() {
+      if (!controlsSummary) return;
+      const parts = [
+        selectedButtonText(buttons, "filter", activeFilter),
+        selectedButtonText(typeButtons, "typeFilter", activeTypeFilter),
+      ];
+      const query = search.value.trim();
+      if (query) parts.push("検索: " + query);
+      const sortLabel = sort.selectedOptions[0] ? sort.selectedOptions[0].textContent.trim() : "";
+      if (sort.value !== "index" && sortLabel) parts.push(sortLabel);
+      controlsSummary.textContent = parts.filter(Boolean).join(" / ");
+    }
+
     function applyFilter() {
       applySort();
       const query = search.value.trim().toLowerCase();
@@ -791,6 +880,7 @@ ${cards}
         if (show) visible += 1;
       }
       count.textContent = String(visible);
+      updateControlsSummary();
     }
 
     buttons.forEach((button) => {
@@ -827,6 +917,12 @@ ${cards}
     const serverHome = document.querySelector("#server-home");
     if (serverHome && location.protocol === "file:") {
       serverHome.href = "http://localhost:8787/";
+    }
+    if (controlsToggle && pageHeader) {
+      controlsToggle.addEventListener("click", () => {
+        const isOpen = pageHeader.classList.toggle("controls-open");
+        controlsToggle.setAttribute("aria-expanded", String(isOpen));
+      });
     }
     sort.addEventListener("change", applyFilter);
     search.addEventListener("input", applyFilter);
