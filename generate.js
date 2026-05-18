@@ -332,8 +332,7 @@ function generateViewer(items, stats) {
             <div class="meta">
               <span class="index">#${escapeHtml(item.index)}</span>
               <span class="type-badge">${escapeHtml(item.typeLabel)}</span>
-              <span class="status ${item.inTop3 ? "ok" : "missing"}">${item.inTop3 ? "3位以内" : "4位以下"}</span>
-              ${item.rank ? `<span class="rank-badge rank-${item.rank}">${item.rank}位</span>` : ""}
+              <span class="rank-badge rank-badge--${item.rank || "outside"}" data-rank-category="${item.rank || "outside"}">${item.rank ? `${item.rank}位` : "4位以下"}</span>
             </div>
             <h2><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a></h2>
             <p class="id">${escapeHtml(item.contentId)}</p>
@@ -360,7 +359,6 @@ function generateViewer(items, stats) {
       --line: #dce2e6;
       --accent: #0a7c7b;
       --danger: #bf3434;
-      --ok: #38723b;
       --shadow: 0 1px 2px rgba(20, 30, 40, .08);
     }
     * { box-sizing: border-box; }
@@ -525,12 +523,6 @@ function generateViewer(items, stats) {
       font-size: 13px;
       font-variant-numeric: tabular-nums;
     }
-    .status {
-      border-radius: 999px;
-      padding: 2px 8px;
-      font-size: 12px;
-      font-weight: 700;
-    }
     .type-badge {
       border-radius: 999px;
       padding: 2px 8px;
@@ -538,14 +530,6 @@ function generateViewer(items, stats) {
       font-weight: 700;
       color: #29414c;
       background: #e7eef2;
-    }
-    .status.ok {
-      color: var(--ok);
-      background: #e6f2e7;
-    }
-    .status.missing {
-      color: var(--danger);
-      background: #f8e7e7;
     }
     .rank-badge {
       border-radius: 999px;
@@ -555,9 +539,13 @@ function generateViewer(items, stats) {
       color: #1f2529;
       background: #eef1f3;
     }
-    .rank-1 { background: #fff1af; }
-    .rank-2 { background: #e4e9ed; }
-    .rank-3 { background: #f0d2b0; }
+    .rank-badge--1 { background: #fff1af; }
+    .rank-badge--2 { background: #e4e9ed; }
+    .rank-badge--3 { background: #f0d2b0; }
+    .rank-badge--outside {
+      color: var(--danger);
+      background: #f8e7e7;
+    }
     h2 {
       margin: 0;
       font-size: 16px;
