@@ -324,7 +324,7 @@ function thumbnailForLocalOrSaved(contentsPath, item) {
 
 function generateViewer(items, stats) {
   const cards = items.map((item) => `
-        <article class="card" data-type="${escapeHtml(item.type)}" data-in-top3="${item.inTop3 ? "true" : "false"}" data-rank="${item.rank || 0}" data-index="${escapeHtml(item.globalIndex)}" data-title="${escapeHtml(item.title.toLowerCase())}" data-id="${escapeHtml(item.contentId.toLowerCase())}">
+        <article class="card" data-type="${escapeHtml(item.type)}" data-in-top3="${item.inTop3 ? "true" : "false"}" data-rank="${item.rank || 0}" data-index="${escapeHtml(item.globalIndex)}" data-title="${escapeHtml(item.title.toLowerCase())}" data-id="${escapeHtml(item.contentId.toLowerCase())}" data-copy-id="${escapeHtml(item.contentId)}" data-copy-title="${escapeHtml(item.title)}" data-copy-contribution="${escapeHtml(item.totalContribution)}" data-copy-url="${escapeHtml(item.url)}" data-copy-nicoad-url="${escapeHtml(item.nicoadUrl)}">
           <a class="thumb-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(item.title)}を開く">
             <img class="thumb" src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy">
           </a>
@@ -604,6 +604,12 @@ function generateViewer(items, stats) {
       text-decoration: none;
       font-size: 14px;
       font-weight: 650;
+      cursor: pointer;
+      transition: transform .08s ease, filter .08s ease, background-color .08s ease;
+    }
+    .button:active {
+      transform: translateY(1px);
+      filter: brightness(.96);
     }
     .button.primary {
       border-color: var(--accent);
@@ -672,10 +678,11 @@ function generateViewer(items, stats) {
         <option value="rank-desc">順位が低い順</option>
       </select>
       <input id="search" type="search" placeholder="タイトルまたはIDで検索">
+      <button class="button" type="button" id="copy-spreadsheet">表示中の結果をコピー</button>
     </div>
   </header>
   <main>
-    <p class="result-line"><span id="visible-count">0</span>件表示</p>
+    <p class="result-line"><span id="visible-count">0</span>件表示<span id="copy-status" role="status" aria-live="polite"></span></p>
     <section class="grid" id="grid">
 ${cards}
     </section>
@@ -688,8 +695,62 @@ ${cards}
     const search = document.querySelector("#search");
     const sort = document.querySelector("#sort");
     const count = document.querySelector("#visible-count");
+    const copyButton = document.querySelector("#copy-spreadsheet");
+    const copyStatus = document.querySelector("#copy-status");
     let activeFilter = "missing";
     let activeTypeFilter = "all";
+    let copyStatusTimer = 0;
+
+    function spreadsheetCell(value) {
+      return String(value || "").replace(/[\\t\\r\\n]+/g, " ").trim();
+    }
+
+    function visibleCardsInOrder() {
+      return [...grid.querySelectorAll(".card:not(.hidden)")];
+    }
+
+    function spreadsheetText() {
+      const rows = [["id", "タイトル", "コンテンツのURL", "獲得貢", "広告画面のURL"]];
+      for (const card of visibleCardsInOrder()) {
+        rows.push([
+          card.dataset.copyId,
+          card.dataset.copyTitle,
+          card.dataset.copyUrl,
+          card.dataset.copyContribution,
+          card.dataset.copyNicoadUrl,
+        ]);
+      }
+      return rows.map((row) => row.map(spreadsheetCell).join("\\t")).join("\\n");
+    }
+
+    async function writeClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch (error) {
+          // Fall back for browsers that expose Clipboard API but deny writeText.
+        }
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      if (!copied) throw new Error("copy failed");
+    }
+
+    function setCopyStatus(message) {
+      clearTimeout(copyStatusTimer);
+      copyStatus.textContent = message ? " / " + message : "";
+      if (message) {
+        copyStatusTimer = setTimeout(() => setCopyStatus(""), 3000);
+      }
+    }
 
     function applySort() {
       const sorted = [...cards].sort((a, b) => {
@@ -745,6 +806,16 @@ ${cards}
         typeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
         applyFilter();
       });
+    });
+    copyButton.addEventListener("click", async () => {
+      const visibleCount = visibleCardsInOrder().length;
+      try {
+        await writeClipboard(spreadsheetText());
+        setCopyStatus(visibleCount + "件をコピーしました");
+      } catch (error) {
+        setCopyStatus("コピーできませんでした");
+        alert("クリップボードへのコピーに失敗しました。ブラウザの権限設定を確認してください。");
+      }
     });
     const generateForm = document.querySelector("#generate-form");
     if (generateForm && location.protocol === "file:") {
