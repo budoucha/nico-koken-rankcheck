@@ -5,7 +5,6 @@ const { main: generate } = require("./generate");
 
 const root = __dirname;
 const inputDir = path.join(root, "input");
-const settingsPath = path.join(root, "settings.json");
 const port = Number(process.env.PORT || 8787);
 
 const CONTENT_TYPES = {
@@ -51,17 +50,15 @@ function serveFile(res, filePath) {
 }
 
 function dashboard(message = "") {
-  const viewerExists = fs.existsSync(path.join(root, "result.html"));
+  const resultStatus = latestResultInfo();
   const inputStatus = [latestContentsInfo(), latestInputInfo("reward")];
-  const settingsExists = fs.existsSync(settingsPath);
-  const settings = loadSettings();
   const externalIcon = `<svg class="external-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path></svg>`;
   return `<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>貢献ランクチェッカー</title>
+  <title>ニコニ貢献ランクチェッカー</title>
   <style>
     :root {
       --bg: #f6f7f8;
@@ -98,8 +95,22 @@ function dashboard(message = "") {
     .actions {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      align-items: flex-start;
+      gap: 16px;
       margin-bottom: 14px;
+    }
+    .action-item {
+      display: grid;
+      flex: 1 1 300px;
+      gap: 6px;
+      min-width: min(100%, 260px);
+    }
+    .action-status {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
     }
     form { margin: 0; }
     .button {
@@ -126,57 +137,6 @@ function dashboard(message = "") {
     .note {
       margin: 0;
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.6;
-    }
-    .advertiser-line {
-      display: flex;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 14px;
-    }
-    .advertiser-line.missing {
-      color: var(--danger);
-    }
-    .tips {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-    }
-    .tips summary {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 20px;
-      height: 20px;
-      border: 1px solid currentColor;
-      border-radius: 50%;
-      font-size: 12px;
-      font-weight: 700;
-      line-height: 1;
-      cursor: pointer;
-      list-style: none;
-    }
-    .tips summary::-webkit-details-marker {
-      display: none;
-    }
-    .tips[open] .tips-body {
-      display: block;
-    }
-    .tips-body {
-      display: none;
-      position: absolute;
-      z-index: 1;
-      top: calc(100% + 6px);
-      left: 0;
-      width: min(360px, calc(100vw - 48px));
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-      color: var(--text);
-      box-shadow: 0 6px 18px rgba(20, 30, 40, .14);
       font-size: 13px;
       line-height: 1.6;
     }
@@ -230,12 +190,6 @@ function dashboard(message = "") {
       stroke-linejoin: round;
       flex: 0 0 auto;
     }
-    .status {
-      margin: 10px 0 0;
-      color: var(--muted);
-      font-size: 12px;
-      overflow-wrap: anywhere;
-    }
     @media (max-width: 640px) {
       .upload-grid { grid-template-columns: 1fr; }
     }
@@ -243,15 +197,14 @@ function dashboard(message = "") {
 </head>
 <body>
   <main>
-    <h1>貢献ランクチェッカー</h1>
-    <div class="note advertiser-line${settingsExists ? "" : " missing"}">対象広告主: <strong>${escapeHtml(settings.advertiserName)}</strong>${settingsExists ? "" : `<details class="tips"><summary aria-label="settings.jsonの作り方">?</summary><span class="tips-body">settings.template.json をコピーして settings.json を作成し、advertiserName に対象広告主名を入力してください。</span></details>`}</div>
+    <h1>ニコニ貢献ランクチェッカー</h1>
     ${message ? `<p class="message">${escapeHtml(message)}</p>` : ""}
-    <div class="actions">
-      <form method="post" action="/generate">
-        <button class="button primary" type="submit">分析する</button>
-      </form>
-      ${viewerExists ? `<a class="button" href="/result.html">分析結果を見る</a>` : ""}
-    </div>
+    ${resultStatus ? `<div class="actions">
+      <div class="action-item">
+        <a class="button" href="/result.html">分析結果</a>
+        <p class="action-status">表示する結果: ${escapeHtml(resultStatus)}</p>
+      </div>
+    </div>` : ""}
     <section class="upload-grid">
       <form class="upload-card" method="post" action="/upload?kind=contents" enctype="multipart/form-data">
         <h2>contents HTMLを取り込む</h2>
@@ -262,8 +215,7 @@ function dashboard(message = "") {
           <li>コンテンツ種別は単一種別（「動画のみ」や「静画のみ」）に限定してください。</li>
         </ul>
         <input type="file" name="html" accept=".html,text/html" required>
-        <button class="button" type="submit">contentsとして保存</button>
-        <p class="status">${escapeHtml(inputStatus[0])}</p>
+        <button class="button" type="submit">取り込む</button>
       </form>
       <form class="upload-card" method="post" action="/upload?kind=reward" enctype="multipart/form-data">
         <h2>reward HTMLを取り込む</h2>
@@ -273,10 +225,17 @@ function dashboard(message = "") {
           <li>対象ページでリストを必要な長さだけ読み込んでから保存してください。</li>
         </ul>
         <input type="file" name="html" accept=".html,text/html" required>
-        <button class="button" type="submit">rewardとして保存</button>
-        <p class="status">${escapeHtml(inputStatus[1])}</p>
+        <button class="button" type="submit">取り込む</button>
       </form>
     </section>
+    <div class="actions">
+      <div class="action-item">
+        <form method="post" action="/generate">
+          <button class="button primary" type="submit">分析する</button>
+        </form>
+        <p class="action-status">対象ファイル: ${escapeHtml(inputStatus[0])} / ${escapeHtml(inputStatus[1])}</p>
+      </div>
+    </div>
     <p class="note">contentsはコンテンツ種別を自動判定して保存します。結果画面の生成には各種別の最新contentsそして最新rewardを使います。</p>
   </main>
 </body>
@@ -284,7 +243,7 @@ function dashboard(message = "") {
 }
 
 function latestInputInfo(kind) {
-  if (!fs.existsSync(inputDir)) return `${kind}: no input directory`;
+  if (!fs.existsSync(inputDir)) return `${kind}: 未取り込み`;
   const files = fs.readdirSync(inputDir)
     .filter((name) => name.toLowerCase().startsWith(kind) && name.toLowerCase().endsWith(".html"))
     .map((name) => {
@@ -293,9 +252,16 @@ function latestInputInfo(kind) {
       return { name, stat };
     })
     .sort((a, b) => b.stat.mtimeMs - a.stat.mtimeMs);
-  if (!files.length) return `${kind}: not uploaded yet`;
+  if (!files.length) return `${kind}: 未取り込み`;
   const newest = files[0];
   return `${kind}: ${newest.name} (${Math.round(newest.stat.size / 1024)} KB, ${newest.stat.mtime.toLocaleString("ja-JP")})`;
+}
+
+function latestResultInfo() {
+  const resultPath = path.join(root, "result.html");
+  if (!fs.existsSync(resultPath)) return "";
+  const stat = fs.statSync(resultPath);
+  return `result.html (${Math.round(stat.size / 1024)} KB, ${stat.mtime.toLocaleString("ja-JP")})`;
 }
 
 function detectContentsType(html) {
@@ -317,7 +283,7 @@ function stripHtml(value) {
 }
 
 function latestContentsInfo() {
-  if (!fs.existsSync(inputDir)) return "contents: no input directory";
+  if (!fs.existsSync(inputDir)) return "contents: 未取り込み";
   const byType = new Map();
   for (const name of fs.readdirSync(inputDir)) {
     if (!name.toLowerCase().startsWith("contents") || !name.toLowerCase().endsWith(".html")) continue;
@@ -335,7 +301,7 @@ function latestContentsInfo() {
     const current = byType.get(type);
     if (!current || stat.mtimeMs > current.stat.mtimeMs) byType.set(type, { name, stat });
   }
-  if (!byType.size) return "contents: not uploaded yet";
+  if (!byType.size) return "contents: 未取り込み";
   return [...byType.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([type, info]) => `${CONTENT_TYPES[type].label}: ${info.name} (${Math.round(info.stat.size / 1024)} KB, ${info.stat.mtime.toLocaleString("ja-JP")})`)
@@ -348,16 +314,6 @@ function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function loadSettings() {
-  const defaults = { advertiserName: "ユーザネーム未設定" };
-  if (!fs.existsSync(settingsPath)) return defaults;
-  try {
-    return { ...defaults, ...JSON.parse(fs.readFileSync(settingsPath, "utf8")) };
-  } catch {
-    return defaults;
-  }
 }
 
 function localPathFromUrl(urlPath) {
@@ -504,5 +460,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(port, () => {
-  console.log(`貢献ランクチェッカー: http://localhost:${port}/`);
+  console.log(`ニコニ貢献ランクチェッカー: http://localhost:${port}/`);
 });

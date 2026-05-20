@@ -10,7 +10,6 @@ const outputHtml = path.join(projectRoot, "result.html");
 const extractedCsv = path.join(projectRoot, "result-contents.csv");
 const missingCsv = path.join(projectRoot, "result-not-in-top3.csv");
 const top3RanksPath = path.join(projectRoot, "result-top3-ranks.txt");
-const settingsPath = path.join(projectRoot, "settings.json");
 
 const CONTENT_TYPES = {
   seiga: {
@@ -33,16 +32,6 @@ const CONTENT_TYPES = {
 
 function keyFor(type, numericId) {
   return `${type}:${numericId}`;
-}
-
-function loadSettings() {
-  const defaults = { advertiserName: "ユーザネーム未設定" };
-  if (!fs.existsSync(settingsPath)) return defaults;
-  try {
-    return { ...defaults, ...JSON.parse(fs.readFileSync(settingsPath, "utf8")) };
-  } catch (error) {
-    throw new Error(`settings.json を読み込めません: ${error.message}`);
-  }
 }
 
 function ensureDir(dir) {
@@ -348,7 +337,7 @@ function generateViewer(items, stats) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>貢献ランクチェッカー</title>
+  <title>ニコニ貢献ランクチェッカー</title>
   <style>
     :root {
       color-scheme: light;
@@ -704,9 +693,8 @@ function generateViewer(items, stats) {
 <body>
   <header>
     <div class="bar">
-      <h1>貢献ランクチェッカー</h1>
+      <h1>ニコニ貢献ランクチェッカー</h1>
       <div class="summary">
-        <span>対象 <strong>${escapeHtml(stats.advertiserName)}</strong></span>
         <span>全件 <strong>${stats.total}</strong></span>
         <span>3位以内 <strong>${stats.inTop3}</strong></span>
         <span>4位以下 <strong>${stats.notInTop3}</strong></span>
@@ -716,7 +704,7 @@ function generateViewer(items, stats) {
         <a class="button" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contentsを開く<svg class="external-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path></svg></a>
         <a class="button" href="https://koken.nicovideo.jp/supporter/reward" target="_blank" rel="noopener noreferrer">rewardを開く<svg class="external-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M10 14 20 4"></path><path d="M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"></path></svg></a>
         <form id="generate-form" method="post" action="/generate">
-          <button class="button primary" type="submit">分析する</button>
+          <button class="button primary" type="submit">再分析する</button>
         </form>
         <a class="button" href="/" id="server-home">入力ファイルを取り込む</a>
       </div>
@@ -983,7 +971,6 @@ async function main() {
   fs.writeFileSync(top3RanksPath, [...top3Ranks.entries()].sort().map(([id, rank]) => `${id},${rank}`).join("\r\n"), "utf8");
 
   const stats = {
-    advertiserName: loadSettings().advertiserName,
     total: items.length,
     inTop3: items.filter((item) => item.inTop3).length,
     notInTop3: missingRows.length,
