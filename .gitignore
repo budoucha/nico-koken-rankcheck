@@ -1,6 +1,7 @@
 input/
 assets/thumbs/
 memo/
+tmp/
 
 result.html
 result-*.csv

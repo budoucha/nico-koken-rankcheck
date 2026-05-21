@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "start": "node --watch server.js",
+    "start": "node --watch dev-server.js",
     "start:plain": "node server.js",
     "generate": "node generate.js"
   }

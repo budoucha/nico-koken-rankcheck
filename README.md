@@ -9,10 +9,16 @@
 ### 1. サーバを起動する
 
 ```sh
-node server.js
+npm start
 ```
 
-または `start.bat` を実行します。
+または `start.bat` を実行します。`npm start` と `start.bat` では開発用の `dev-server.js` が起動し、ファイル変更時に開いているブラウザページも自動更新されます。
+
+ライブリロードなしでアプリケーションサーバーだけを起動したい場合は、次を使います。
+
+```sh
+npm run start:plain
+```
 
 起動後、ブラウザで次を開きます。
 
