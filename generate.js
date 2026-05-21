@@ -311,9 +311,14 @@ function thumbnailForLocalOrSaved(contentsPath, item) {
   return "";
 }
 
+function contributionSortValue(value) {
+  const numeric = Number(String(value || "").replace(/,/g, ""));
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
 function generateViewer(items, stats) {
   const cards = items.map((item) => `
-        <article class="card" data-type="${escapeHtml(item.type)}" data-in-top3="${item.inTop3 ? "true" : "false"}" data-rank="${item.rank || 0}" data-index="${escapeHtml(item.globalIndex)}" data-title="${escapeHtml(item.title.toLowerCase())}" data-id="${escapeHtml(item.contentId.toLowerCase())}" data-copy-id="${escapeHtml(item.contentId)}" data-copy-title="${escapeHtml(item.title)}" data-copy-contribution="${escapeHtml(item.totalContribution)}" data-copy-url="${escapeHtml(item.url)}" data-copy-nicoad-url="${escapeHtml(item.nicoadUrl)}">
+        <article class="card" data-type="${escapeHtml(item.type)}" data-in-top3="${item.inTop3 ? "true" : "false"}" data-rank="${item.rank || 0}" data-index="${escapeHtml(item.globalIndex)}" data-contribution="${contributionSortValue(item.totalContribution)}" data-title="${escapeHtml(item.title.toLowerCase())}" data-id="${escapeHtml(item.contentId.toLowerCase())}" data-copy-id="${escapeHtml(item.contentId)}" data-copy-title="${escapeHtml(item.title)}" data-copy-contribution="${escapeHtml(item.totalContribution)}" data-copy-url="${escapeHtml(item.url)}" data-copy-nicoad-url="${escapeHtml(item.nicoadUrl)}">
           <a class="thumb-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(item.title)}を開く">
             <img class="thumb" src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy">
           </a>
@@ -732,6 +737,8 @@ function generateViewer(items, stats) {
         <option value="index">元の順番</option>
         <option value="rank-asc">順位が高い順</option>
         <option value="rank-desc">順位が低い順</option>
+        <option value="contribution-asc">獲得貢が少ない順</option>
+        <option value="contribution-desc">獲得貢が多い順</option>
       </select>
       <input id="search" type="search" placeholder="タイトルまたはIDで検索">
       <button class="button" type="button" id="copy-spreadsheet">表示中の結果をコピー</button>
@@ -820,6 +827,14 @@ ${cards}
             return sort.value === "rank-asc" ? ar - br : br - ar;
           }
           if (ar !== br) return ar ? -1 : 1;
+        }
+        if (sort.value === "contribution-asc" || sort.value === "contribution-desc") {
+          const ac = Number(a.dataset.contribution);
+          const bc = Number(b.dataset.contribution);
+          if (ac && bc && ac !== bc) {
+            return sort.value === "contribution-asc" ? ac - bc : bc - ac;
+          }
+          if (ac !== bc) return ac ? -1 : 1;
         }
         return Number(a.dataset.index) - Number(b.dataset.index);
       });
