@@ -1,5 +1,6 @@
 (() => {
   const core = window.KokenCore;
+  const bookmarklet = window.KokenBookmarklet;
   const HISTORY_KEY = "koken-lite-result-history-v1";
   const HISTORY_LIMIT = 10;
   const MAX_DATA_THUMBNAIL_LENGTH = 20000;
@@ -35,6 +36,7 @@
     downloadRanks: document.querySelector("#download-ranks"),
     historyList: document.querySelector("#history-list"),
     clearHistory: document.querySelector("#clear-history"),
+    copyBookmarklet: document.querySelector("#copy-bookmarklet"),
   };
 
   let copyStatusTimer = 0;
@@ -535,6 +537,15 @@
 
   elements.sort.addEventListener("change", renderGrid);
   elements.search.addEventListener("input", renderGrid);
+
+  elements.copyBookmarklet.addEventListener("click", async () => {
+    try {
+      await writeClipboard(bookmarklet.BOOKMARKLET_URL);
+      setStatus("ブックマークレットをコピーしました。ブックマークのURL欄に貼り付けてください。");
+    } catch {
+      setStatus("ブックマークレットをコピーできませんでした。", true);
+    }
+  });
 
   elements.historyList.addEventListener("click", (event) => {
     const openButton = event.target.closest("[data-history-open]");

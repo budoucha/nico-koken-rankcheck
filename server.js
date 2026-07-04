@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { main: generate } = require("./generate");
 const { CONTENT_TYPES, detectContentsType } = require("./src/core/koken-core");
+const { BOOKMARKLET_URL } = require("./src/core/bookmarklet");
 
 const root = __dirname;
 const inputDir = path.join(root, "input");
@@ -168,6 +169,30 @@ function dashboard(message = "") {
       width: 100%;
       margin-bottom: 10px;
     }
+    .bookmarklet-card {
+      margin: 16px 0 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafbfb;
+    }
+    .bookmarklet-card h2 {
+      margin: 0 0 8px;
+      font-size: 15px;
+      letter-spacing: 0;
+    }
+    .bookmarklet-card .button {
+      margin-top: 10px;
+    }
+    .bookmarklet-status {
+      margin: 8px 0 0;
+      color: #075f5e;
+      font-size: 13px;
+    }
+    .bookmarklet-status.error {
+      color: var(--danger);
+      font-weight: 650;
+    }
     .external-icon {
       width: 15px;
       height: 15px;
@@ -193,6 +218,12 @@ function dashboard(message = "") {
         <p class="action-status">表示する結果: ${escapeHtml(resultStatus)}</p>
       </div>
     </div>` : ""}
+    <section class="bookmarklet-card" aria-labelledby="bookmarklet-heading">
+      <h2 id="bookmarklet-heading">HTML保存ブックマークレット</h2>
+      <p class="note">ボタンでコピーした内容をブラウザのブックマークURLに登録します。ニコニ貢献のcontents/rewardで必要な分だけ読み込んでから、そのブックマークを押すとHTMLファイルを保存できます。保存したHTMLを下の入力欄に指定してください。</p>
+      <button id="copy-bookmarklet" class="button" type="button">ブックマークレットをコピー</button>
+      <p id="bookmarklet-status" class="bookmarklet-status" role="status" aria-live="polite"></p>
+    </section>
     <section class="upload-grid">
       <form class="upload-card" method="post" action="/upload?kind=contents" enctype="multipart/form-data">
         <h2>contents HTMLを取り込む</h2>
@@ -226,6 +257,43 @@ function dashboard(message = "") {
     </div>
     <p class="note">contentsはコンテンツ種別を自動判定して保存します。結果画面の生成には各種別の最新contentsそして最新rewardを使います。</p>
   </main>
+  <script>
+    (() => {
+      const bookmarkletUrl = ${JSON.stringify(BOOKMARKLET_URL)};
+      const button = document.querySelector("#copy-bookmarklet");
+      const status = document.querySelector("#bookmarklet-status");
+      async function writeClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+          try {
+            await navigator.clipboard.writeText(text);
+            return;
+          } catch {
+            // Fall through to textarea copy.
+          }
+        }
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand("copy");
+        textarea.remove();
+        if (!copied) throw new Error("copy failed");
+      }
+      button.addEventListener("click", async () => {
+        try {
+          await writeClipboard(bookmarkletUrl);
+          status.textContent = "コピーしました。ブックマークのURL欄に貼り付けてください。";
+          status.classList.remove("error");
+        } catch {
+          status.textContent = "コピーできませんでした。";
+          status.classList.add("error");
+        }
+      });
+    })();
+  </script>
 </body>
 </html>`;
 }

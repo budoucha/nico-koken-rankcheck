@@ -73,5 +73,10 @@
     "level": "platform",
     "checks": ["lite-localstorage-result-history", "raw-html-not-persisted"],
     "notes": "Lite may persist parsed result data in localStorage, but must not store uploaded HTML source."
+  },
+  "F016": {
+    "level": "platform",
+    "checks": ["shared-bookmarklet-source", "node-and-lite-copy-controls"],
+    "notes": "Node and lite should expose the same bookmarklet URL for saving source HTML files from nicokoken pages."
   }
 }

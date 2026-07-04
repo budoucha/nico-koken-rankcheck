@@ -41,3 +41,4 @@ Source values:
 | F013 | remote/video thumbnail fallback | platform | required | best-effort | Lite must tolerate CORS/API failures without breaking analysis. |
 | F014 | GitHub Pages static deployment | lite-first | optional | required | Lite version must run from static hosting without a server. |
 | F015 | lite result history | lite-first | optional | required | Lite stores parsed result data in `localStorage` for reopening past analyses. Raw uploaded HTML must not be persisted. |
+| F016 | source HTML bookmarklet | platform | required | required | Both versions expose the same bookmarklet for saving the current nicokoken page HTML as an uploadable file. |

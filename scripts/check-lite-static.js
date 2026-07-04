@@ -5,6 +5,8 @@ const root = path.resolve(__dirname, "..");
 const docsDir = path.join(root, "docs");
 const srcCorePath = path.join(root, "src", "core", "koken-core.js");
 const docsCorePath = path.join(docsDir, "koken-core.js");
+const srcBookmarkletPath = path.join(root, "src", "core", "bookmarklet.js");
+const docsBookmarkletPath = path.join(docsDir, "bookmarklet.js");
 const indexPath = path.join(docsDir, "index.html");
 const appCssPath = path.join(docsDir, "app.css");
 const appJsPath = path.join(docsDir, "app.js");
@@ -18,7 +20,7 @@ function fail(message) {
   process.exitCode = 1;
 }
 
-for (const filePath of [srcCorePath, docsCorePath, indexPath, appCssPath, appJsPath]) {
+for (const filePath of [srcCorePath, docsCorePath, srcBookmarkletPath, docsBookmarkletPath, indexPath, appCssPath, appJsPath]) {
   if (!fs.existsSync(filePath)) {
     fail(`missing required file: ${path.relative(root, filePath)}`);
   }
@@ -28,6 +30,8 @@ if (process.exitCode) process.exit(process.exitCode);
 
 const srcCore = read(srcCorePath);
 const docsCore = read(docsCorePath);
+const srcBookmarklet = read(srcBookmarkletPath);
+const docsBookmarklet = read(docsBookmarkletPath);
 const index = read(indexPath);
 const app = read(appJsPath);
 
@@ -35,7 +39,11 @@ if (srcCore !== docsCore) {
   fail("docs/koken-core.js is out of sync with src/core/koken-core.js");
 }
 
-for (const reference of ["./app.css", "./koken-core.js", "./app.js"]) {
+if (srcBookmarklet !== docsBookmarklet) {
+  fail("docs/bookmarklet.js is out of sync with src/core/bookmarklet.js");
+}
+
+for (const reference of ["./app.css", "./koken-core.js", "./bookmarklet.js", "./app.js"]) {
   if (!index.includes(reference)) {
     fail(`docs/index.html must reference ${reference}`);
   }
@@ -51,6 +59,7 @@ for (const required of [
   "id=\"download-ranks\"",
   "id=\"history-list\"",
   "id=\"clear-history\"",
+  "id=\"copy-bookmarklet\"",
 ]) {
   if (!index.includes(required)) {
     fail(`docs/index.html is missing ${required}`);
@@ -69,6 +78,8 @@ for (const required of [
   "localStorage",
   "HISTORY_KEY",
   "renderHistory",
+  "window.KokenBookmarklet",
+  "BOOKMARKLET_URL",
 ]) {
   if (!app.includes(required)) {
     fail(`docs/app.js is missing ${required}`);

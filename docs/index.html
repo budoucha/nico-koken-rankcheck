@@ -6,6 +6,7 @@
   <title>ニコニ貢献ランクチェッカー lite</title>
   <link rel="stylesheet" href="./app.css">
   <script src="./koken-core.js" defer></script>
+  <script src="./bookmarklet.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
@@ -43,6 +44,11 @@
               <span class="input-detail">貢献成績ページを保存したHTMLを1つ選択します。</span>
               <input id="reward-file" type="file" accept=".html,text/html">
             </label>
+            <section class="input-panel bookmarklet-panel" aria-labelledby="bookmarklet-heading">
+              <h3 id="bookmarklet-heading">HTML保存ブックマークレット</h3>
+              <p class="input-detail">コピーした内容をブラウザのブックマークURLに登録します。ニコニ貢献のcontents/rewardで必要な分だけ読み込んでから、そのブックマークを押すとHTMLファイルを保存できます。</p>
+              <button id="copy-bookmarklet" class="button" type="button">ブックマークレットをコピー</button>
+            </section>
           </div>
           <section class="history-panel" aria-labelledby="history-heading">
             <h3 id="history-heading">履歴</h3>

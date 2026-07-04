@@ -16,6 +16,8 @@ docs/index.html
 
 lite版では、contents HTMLとreward HTMLをページ上で選択すると、その場で結果を表示します。解析済みの実行結果はブラウザのLocalStorageに保存され、履歴から開き直せます。CSV/TXTはブラウザからダウンロードできます。サーバ側の `input/` 保存、`result.html` 生成、保存HTMLに付属するローカルサムネイルフォルダの自動探索は行いません。アップロードしたHTML本文はLocalStorageに保存しません。
 
+Node版とlite版の入力画面には、HTML保存ブックマークレットをコピーするボタンがあります。コピーした内容をブラウザのブックマークURLに登録し、ニコニ貢献のcontents/rewardページで必要な分だけ読み込んでから実行すると、入力用HTMLを保存できます。
+
 ## 使い方
 
 ### 1. サーバを起動する
