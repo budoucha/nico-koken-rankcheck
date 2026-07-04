@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ニコニ貢献ランクチェッカー lite</title>
+  <link rel="stylesheet" href="./app.css">
+  <script src="./koken-core.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div>
+        <h1>ニコニ貢献ランクチェッカー lite</h1>
+        <p id="source-summary" class="source-summary">contents HTMLとreward HTMLを選択してください</p>
+      </div>
+      <div class="header-actions">
+        <a class="button" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contentsを開く</a>
+        <a class="button" href="https://koken.nicovideo.jp/supporter/reward" target="_blank" rel="noopener noreferrer">rewardを開く</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="input-band" aria-labelledby="input-heading">
+      <div class="input-inner">
+        <h2 id="input-heading">入力</h2>
+        <div class="input-grid">
+          <label class="input-panel">
+            <span class="input-label">contents HTML</span>
+            <span class="input-detail">静画・動画など、種別ごとに保存したHTMLを複数選択できます。</span>
+            <input id="contents-files" type="file" accept=".html,text/html" multiple>
+          </label>
+          <label class="input-panel">
+            <span class="input-label">reward HTML</span>
+            <span class="input-detail">貢献成績ページを保存したHTMLを1つ選択します。</span>
+            <input id="reward-file" type="file" accept=".html,text/html">
+          </label>
+        </div>
+        <div class="input-actions">
+          <button id="analyze" class="button primary" type="button">分析する</button>
+          <p id="status" class="status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="results" class="results hidden" aria-labelledby="results-heading">
+      <div class="results-header">
+        <div>
+          <h2 id="results-heading">結果</h2>
+          <div id="summary" class="summary"></div>
+        </div>
+        <div class="download-actions">
+          <button id="download-contents" class="button" type="button">contents CSV</button>
+          <button id="download-missing" class="button" type="button">4位以下 CSV</button>
+          <button id="download-ranks" class="button" type="button">順位 TXT</button>
+        </div>
+      </div>
+
+      <div class="controls" id="result-controls">
+        <div class="segmented" aria-label="表示フィルタ">
+          <button type="button" data-filter="missing" aria-pressed="true">4位以下</button>
+          <button type="button" data-filter="all" aria-pressed="false">すべて</button>
+          <button type="button" data-filter="top3" aria-pressed="false">3位以内</button>
+          <button type="button" data-filter="rank3" aria-pressed="false">3位</button>
+          <button type="button" data-filter="rank2" aria-pressed="false">2位</button>
+          <button type="button" data-filter="rank1" aria-pressed="false">1位</button>
+        </div>
+        <div class="segmented type-filter" id="type-filter" aria-label="データ種別フィルタ"></div>
+        <select id="sort" aria-label="ソート">
+          <option value="index">元の順番</option>
+          <option value="rank-asc">順位が高い順</option>
+          <option value="rank-desc">順位が低い順</option>
+          <option value="contribution-desc">獲得貢が多い順</option>
+          <option value="contribution-asc">獲得貢が少ない順</option>
+        </select>
+        <input id="search" type="search" placeholder="タイトルまたはIDで検索" aria-label="検索">
+        <button id="copy-visible" class="button" type="button">表示中をコピー</button>
+      </div>
+
+      <p class="result-line"><span id="visible-count">0</span>件表示<span id="copy-status"></span></p>
+      <section id="grid" class="grid" aria-label="解析結果"></section>
+    </section>
+  </main>
+</body>
+</html>

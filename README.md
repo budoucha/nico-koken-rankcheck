@@ -4,6 +4,18 @@
 
 現在は静画と動画に対応しています。
 
+## lite版
+
+サーバを起動せずにブラウザだけで使うlite版は `docs/index.html` です。GitHub Pagesでは `docs/` を公開元にする想定です。
+
+ローカルで試す場合は、次を直接開きます。
+
+```text
+docs/index.html
+```
+
+lite版では、contents HTMLとreward HTMLをページ上で選択すると、その場で結果を表示します。CSV/TXTはブラウザからダウンロードできます。サーバ側の `input/` 保存、`result.html` 生成、保存HTMLに付属するローカルサムネイルフォルダの自動探索は行いません。
+
 ## 使い方
 
 ### 1. サーバを起動する
