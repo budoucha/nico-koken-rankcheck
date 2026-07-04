@@ -10,32 +10,28 @@ const outputHtml = path.join(projectRoot, "result.html");
 const extractedCsv = path.join(projectRoot, "result-contents.csv");
 const missingCsv = path.join(projectRoot, "result-not-in-top3.csv");
 const top3RanksPath = path.join(projectRoot, "result-top3-ranks.txt");
-
-const CONTENT_TYPES = {
-  seiga: {
-    label: "静画",
-    filterLabel: "静画のみ表示",
-    urlPattern: /https:\/\/seiga\.nicovideo\.jp\/seiga\/(im(\d+))/,
-    adUrl: (contentId) => `https://nicoad.nicovideo.jp/seiga/publish/${contentId}`,
-    remoteThumb: (numericId) => `https://lohas.nicoseiga.jp/thumb/${numericId}u`,
-    rewardThumbPattern: /lohas\.nicoseiga\.jp\/thumb\/(\d+)u\b/,
-  },
-  video: {
-    label: "動画",
-    filterLabel: "動画のみ表示",
-    urlPattern: /https:\/\/www\.nicovideo\.jp\/watch\/(([a-z]{2})(\d+))/,
-    adUrl: (contentId) => `https://nicoad.nicovideo.jp/video/publish/${contentId}`,
-    remoteThumb: (numericId) => `https://nicovideo.cdn.nimg.jp/thumbnails/${numericId}/${numericId}.M`,
-    rewardThumbPattern: /nicovideo\.cdn\.nimg\.jp\/thumbnails\/(\d+)\//,
-  },
-};
-
-function keyFor(type, numericId) {
-  return `${type}:${numericId}`;
-}
+const {
+  CONTENT_TYPES,
+  CONTENTS_CSV_HEADER,
+  MISSING_CSV_HEADER,
+  escapeHtml,
+  decodeHtmlText,
+  csvText,
+  top3RanksText,
+  detectContentsType,
+  extractContents,
+  extractTop3Ranks,
+  normalizeResultItem,
+  createMissingRows,
+  contributionSortValue,
+} = require("./src/core/koken-core");
 
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
+}
+
+function writeCsv(filePath, header, rows) {
+  fs.writeFileSync(filePath, csvText(header, rows), "utf8");
 }
 
 function latestInput(prefix) {
@@ -74,134 +70,6 @@ function latestInputsByContentType() {
     if (!current || stat.mtimeMs > current.mtimeMs) latest.set(type, { type, fullPath, mtimeMs: stat.mtimeMs });
   }
   return [...latest.values()].sort((a, b) => a.type.localeCompare(b.type));
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function decodeHtmlText(value) {
-  return String(value ?? "")
-    .replace(/<svg[\s\S]*?<\/svg>/g, "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function csvEscape(value) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
-}
-
-function writeCsv(filePath, header, rows) {
-  const lines = [header.map(csvEscape).join(",")];
-  for (const row of rows) {
-    lines.push(header.map((key) => csvEscape(row[key])).join(","));
-  }
-  fs.writeFileSync(filePath, `\uFEFF${lines.join("\r\n")}`, "utf8");
-}
-
-function detectContentsType(contentsHtml) {
-  const filterMatch = contentsHtml.match(/<button[^>]*class="trigger"[^>]*aria-selected="true"[^>]*>([^<]+)<\/button>/);
-  const filterText = filterMatch ? decodeHtmlText(filterMatch[1]) : "";
-  for (const [type, config] of Object.entries(CONTENT_TYPES)) {
-    if (filterText.includes(config.filterLabel) || contentsHtml.includes(`class="generic-service-name">${config.label}</span>`)) {
-      return type;
-    }
-  }
-  for (const [type, config] of Object.entries(CONTENT_TYPES)) {
-    if (config.urlPattern.test(contentsHtml)) return type;
-  }
-  return "";
-}
-
-function extractTotalContribution(itemHtml) {
-  const contributionMatch = itemHtml.match(/class="total-contribution"[\s\S]*?<strong[^>]*class="value"[^>]*>([\s\S]*?)<\/strong>/);
-  if (!contributionMatch) return "";
-  const text = decodeHtmlText(contributionMatch[1].replace(/<svg[\s\S]*?<\/svg>/g, ""));
-  const numberMatch = text.match(/[0-9][0-9,\s]*/);
-  return numberMatch ? numberMatch[0].replace(/\s+/g, "") : "";
-}
-
-function extractThumbnailSrc(itemHtml) {
-  const thumbMatch = itemHtml.match(/<img[^>]+class="thumbnail-image"[^>]+src="([^"]+)"/);
-  return thumbMatch ? decodeHtmlText(thumbMatch[1]) : "";
-}
-
-function extractContents(contentsHtml, fallbackType = "") {
-  const detectedType = detectContentsType(contentsHtml) || fallbackType;
-  if (!detectedType || !CONTENT_TYPES[detectedType]) {
-    throw new Error("contents HTMLのデータ種別を判定できません");
-  }
-  const config = CONTENT_TYPES[detectedType];
-  const blocks = contentsHtml.split('<li data-v-0f929b6d="" class="item"').slice(1);
-  const rows = [];
-  for (const part of blocks) {
-    const end = part.indexOf("</li>");
-    const block = end >= 0 ? part.slice(0, end + 5) : part.slice(0, 10000);
-    const titleMatch = block.match(/<p[^>]+class="title"[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
-    if (!titleMatch) continue;
-    const idMatch = titleMatch[1].match(config.urlPattern);
-    if (!idMatch) continue;
-    const contentId = idMatch[1];
-    const numericId = idMatch[3] || idMatch[2];
-    const hasNicoad = block.includes('data-type="nicoad"');
-    const totalContribution = extractTotalContribution(block);
-    const thumbnailSrc = extractThumbnailSrc(block);
-    rows.push({
-      index: String(rows.length + 1),
-      type: detectedType,
-      typeLabel: config.label,
-      title: decodeHtmlText(titleMatch[2]),
-      url: titleMatch[1],
-      contentId,
-      numericId,
-      totalContribution,
-      thumbnailSrc,
-      key: keyFor(detectedType, numericId),
-      inferredNicoadUrl: hasNicoad ? config.adUrl(contentId) : "",
-    });
-  }
-  return rows.slice(0, 500);
-}
-
-function detectRank(itemHtml) {
-  const paths = [...itemHtml.matchAll(/<path[^>]+d="([^"]+)"/g)].map((match) => match[1]);
-  const digitPath = paths[paths.length - 1] || "";
-  if (digitPath.includes("M14.616 19.176V9H11")) return 1;
-  if (digitPath.includes("M15.824 19.176v-1.68h-2.992")) return 2;
-  if (digitPath.includes("M13.792 19.176c1.355")) return 3;
-  return 0;
-}
-
-function extractTop3Ranks(rewardHtml) {
-  const ranks = new Map();
-  const itemRegex = /<li\b[^>]*class="item"[\s\S]*?<\/li>/g;
-  let match;
-  while ((match = itemRegex.exec(rewardHtml)) !== null) {
-    const item = match[0];
-    let detectedType = "";
-    let numericId = "";
-    for (const [type, config] of Object.entries(CONTENT_TYPES)) {
-      if (!item.includes(`data-type="${type}"`)) continue;
-      const thumb = item.match(config.rewardThumbPattern);
-      if (!thumb) continue;
-      detectedType = type;
-      numericId = thumb[1];
-      break;
-    }
-    const rank = detectRank(item);
-    if (detectedType && numericId && rank) ranks.set(keyFor(detectedType, numericId), rank);
-  }
-  return ranks;
 }
 
 function findLocalThumbnailSource(contentsPath, item) {
@@ -309,11 +177,6 @@ function thumbnailForLocalOrSaved(contentsPath, item) {
   }
   if (item.thumbnailSrc && /^https?:\/\//i.test(item.thumbnailSrc)) return item.thumbnailSrc;
   return "";
-}
-
-function contributionSortValue(value) {
-  const numeric = Number(String(value || "").replace(/,/g, ""));
-  return Number.isFinite(numeric) ? numeric : 0;
 }
 
 function generateViewer(items, stats) {
@@ -956,34 +819,17 @@ async function main() {
   }
   const top3Ranks = extractTop3Ranks(rewardHtml);
   const items = await Promise.all(contentsRows.map(async (row, index) => {
-    const rank = top3Ranks.get(row.key) || 0;
-    const inTop3 = rank > 0;
-    return {
-      ...row,
-      globalIndex: String(index + 1),
-      nicoadUrl: row.inferredNicoadUrl || CONTENT_TYPES[row.type].adUrl(row.contentId),
-      thumbnail: await thumbnailFor(row.sourcePath, row),
-      rank,
-      inTop3,
-    };
+    const thumbnail = await thumbnailFor(row.sourcePath, row);
+    return normalizeResultItem(row, index, {
+      rank: top3Ranks.get(row.key) || 0,
+      thumbnail,
+    });
   }));
-  const missingRows = items
-    .filter((item) => !item.inTop3)
-    .map((item) => ({
-      index: item.index,
-      title: item.title,
-      url: item.url,
-      type: item.type,
-      typeLabel: item.typeLabel,
-      contentId: item.contentId,
-      numericId: item.numericId,
-      totalContribution: item.totalContribution,
-      inferredNicoadUrl: item.nicoadUrl,
-    }));
+  const missingRows = createMissingRows(items);
 
-  writeCsv(extractedCsv, ["index", "type", "typeLabel", "title", "url", "contentId", "numericId", "totalContribution", "key", "inferredNicoadUrl"], contentsRows);
-  writeCsv(missingCsv, ["index", "type", "typeLabel", "title", "url", "contentId", "numericId", "totalContribution", "inferredNicoadUrl"], missingRows);
-  fs.writeFileSync(top3RanksPath, [...top3Ranks.entries()].sort().map(([id, rank]) => `${id},${rank}`).join("\r\n"), "utf8");
+  writeCsv(extractedCsv, CONTENTS_CSV_HEADER, contentsRows);
+  writeCsv(missingCsv, MISSING_CSV_HEADER, missingRows);
+  fs.writeFileSync(top3RanksPath, top3RanksText(top3Ranks), "utf8");
 
   const stats = {
     total: items.length,

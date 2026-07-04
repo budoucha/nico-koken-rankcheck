@@ -2,23 +2,11 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { main: generate } = require("./generate");
+const { CONTENT_TYPES, detectContentsType } = require("./src/core/koken-core");
 
 const root = __dirname;
 const inputDir = path.join(root, "input");
 const port = Number(process.env.PORT || 8787);
-
-const CONTENT_TYPES = {
-  seiga: {
-    label: "静画",
-    filterLabel: "静画のみ表示",
-    urlPattern: /https:\/\/seiga\.nicovideo\.jp\/seiga\/im\d+/,
-  },
-  video: {
-    label: "動画",
-    filterLabel: "動画のみ表示",
-    urlPattern: /https:\/\/www\.nicovideo\.jp\/watch\/[a-z]{2}\d+/,
-  },
-};
 
 function send(res, status, body, contentType = "text/html; charset=utf-8") {
   res.writeHead(status, {
@@ -262,24 +250,6 @@ function latestResultInfo() {
   if (!fs.existsSync(resultPath)) return "";
   const stat = fs.statSync(resultPath);
   return `result.html (${Math.round(stat.size / 1024)} KB, ${stat.mtime.toLocaleString("ja-JP")})`;
-}
-
-function detectContentsType(html) {
-  const filterMatch = html.match(/<button[^>]*class="trigger"[^>]*aria-selected="true"[^>]*>([^<]+)<\/button>/);
-  const filterText = filterMatch ? stripHtml(filterMatch[1]) : "";
-  for (const [type, config] of Object.entries(CONTENT_TYPES)) {
-    if (filterText.includes(config.filterLabel) || html.includes(`class="generic-service-name">${config.label}</span>`)) {
-      return type;
-    }
-  }
-  for (const [type, config] of Object.entries(CONTENT_TYPES)) {
-    if (config.urlPattern.test(html)) return type;
-  }
-  return "";
-}
-
-function stripHtml(value) {
-  return String(value || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 }
 
 function latestContentsInfo() {
