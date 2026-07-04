@@ -1,5 +1,8 @@
 (() => {
   const core = window.KokenCore;
+  const HISTORY_KEY = "koken-lite-result-history-v1";
+  const HISTORY_LIMIT = 10;
+  const MAX_DATA_THUMBNAIL_LENGTH = 20000;
   const state = {
     contentsRows: [],
     items: [],
@@ -9,6 +12,7 @@
     rewardName: "",
     rankFilter: "missing",
     typeFilter: "all",
+    history: [],
   };
 
   const elements = {
@@ -29,6 +33,8 @@
     downloadContents: document.querySelector("#download-contents"),
     downloadMissing: document.querySelector("#download-missing"),
     downloadRanks: document.querySelector("#download-ranks"),
+    historyList: document.querySelector("#history-list"),
+    clearHistory: document.querySelector("#clear-history"),
   };
 
   let copyStatusTimer = 0;
@@ -44,6 +50,192 @@
     if (message) {
       copyStatusTimer = setTimeout(() => setCopyStatus(""), 3000);
     }
+  }
+
+  function readHistory() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter(isValidHistoryEntry).slice(0, HISTORY_LIMIT) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeHistory(entries) {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, HISTORY_LIMIT)));
+  }
+
+  function isValidHistoryEntry(entry) {
+    return entry &&
+      typeof entry.id === "string" &&
+      Array.isArray(entry.contentsRows) &&
+      Array.isArray(entry.items) &&
+      Array.isArray(entry.top3Ranks);
+  }
+
+  function compactRow(row) {
+    const compact = {};
+    for (const key of core.CONTENTS_CSV_HEADER) {
+      compact[key] = row[key] ?? "";
+    }
+    compact.sourceName = row.sourceName || "";
+    return compact;
+  }
+
+  function compactThumbnail(item) {
+    const thumbnail = String(item.thumbnail || "");
+    if (/^data:/i.test(thumbnail) && thumbnail.length > MAX_DATA_THUMBNAIL_LENGTH) {
+      return core.CONTENT_TYPES[item.type].remoteThumb(item.numericId);
+    }
+    return thumbnail;
+  }
+
+  function compactItem(item) {
+    return {
+      index: item.index,
+      globalIndex: item.globalIndex,
+      type: item.type,
+      typeLabel: item.typeLabel,
+      title: item.title,
+      url: item.url,
+      contentId: item.contentId,
+      numericId: item.numericId,
+      totalContribution: item.totalContribution,
+      key: item.key,
+      inferredNicoadUrl: item.inferredNicoadUrl,
+      nicoadUrl: item.nicoadUrl,
+      thumbnail: compactThumbnail(item),
+      rank: item.rank,
+      inTop3: item.inTop3,
+    };
+  }
+
+  function historyEntryFromState() {
+    const savedAt = new Date().toISOString();
+    const total = state.items.length;
+    const inTop3 = state.items.filter((item) => item.inTop3).length;
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      savedAt,
+      contentsNames: [...state.contentsNames],
+      rewardName: state.rewardName,
+      summary: {
+        total,
+        inTop3,
+        missing: total - inTop3,
+      },
+      contentsRows: state.contentsRows.map(compactRow),
+      items: state.items.map(compactItem),
+      top3Ranks: [...state.top3Ranks.entries()],
+    };
+  }
+
+  function saveCurrentResultToHistory() {
+    try {
+      const entry = historyEntryFromState();
+      state.history = [entry, ...state.history.filter((item) => item.id !== entry.id)].slice(0, HISTORY_LIMIT);
+      writeHistory(state.history);
+      renderHistory();
+      return true;
+    } catch {
+      state.history = readHistory();
+      renderHistory();
+      return false;
+    }
+  }
+
+  function loadHistoryEntry(entry) {
+    Object.assign(state, {
+      contentsRows: entry.contentsRows.map((row) => ({ ...row })),
+      items: entry.items.map((item) => ({ ...item })),
+      missingRows: core.createMissingRows(entry.items),
+      top3Ranks: new Map(entry.top3Ranks),
+      contentsNames: [...(entry.contentsNames || [])],
+      rewardName: entry.rewardName || "",
+      rankFilter: "missing",
+      typeFilter: "all",
+    });
+    resetControls();
+    renderAll();
+    setStatus("履歴を開きました。");
+  }
+
+  function formatHistoryDate(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString("ja-JP", {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  function historyTitle(entry) {
+    const contents = Array.isArray(entry.contentsNames) && entry.contentsNames.length
+      ? entry.contentsNames.join(" / ")
+      : "contents";
+    return `${formatHistoryDate(entry.savedAt)} ${contents}`;
+  }
+
+  function renderHistory() {
+    elements.historyList.replaceChildren();
+    elements.clearHistory.disabled = state.history.length === 0;
+    if (!state.history.length) {
+      const empty = document.createElement("p");
+      empty.className = "history-empty";
+      empty.textContent = "履歴なし";
+      elements.historyList.appendChild(empty);
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    for (const entry of state.history) {
+      fragment.appendChild(historyItem(entry));
+    }
+    elements.historyList.appendChild(fragment);
+  }
+
+  function historyItem(entry) {
+    const article = document.createElement("article");
+    article.className = "history-item";
+
+    const main = document.createElement("div");
+    main.className = "history-main";
+    const title = document.createElement("div");
+    title.className = "history-title";
+    title.textContent = historyTitle(entry);
+    const meta = document.createElement("div");
+    meta.className = "history-meta";
+    const summary = entry.summary || {};
+    meta.textContent = `全件 ${summary.total || 0} / 4位以下 ${summary.missing || 0}`;
+    main.append(title, meta);
+
+    const buttons = document.createElement("div");
+    buttons.className = "history-buttons";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "button primary";
+    open.dataset.historyOpen = entry.id;
+    open.textContent = "開く";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "button";
+    remove.dataset.historyRemove = entry.id;
+    remove.textContent = "削除";
+    buttons.append(open, remove);
+
+    article.append(main, buttons);
+    return article;
+  }
+
+  function resetControls() {
+    document.querySelectorAll("[data-filter]").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.filter === state.rankFilter));
+    });
+    elements.search.value = "";
+    elements.sort.value = "index";
   }
 
   async function readTextFile(file) {
@@ -311,13 +503,9 @@
         rankFilter: "missing",
         typeFilter: "all",
       });
-      document.querySelectorAll("[data-filter]").forEach((button) => {
-        button.setAttribute("aria-pressed", String(button.dataset.filter === state.rankFilter));
-      });
-      elements.search.value = "";
-      elements.sort.value = "index";
+      resetControls();
       renderAll();
-      setStatus("分析が完了しました。");
+      setStatus(saveCurrentResultToHistory() ? "分析が完了しました。履歴に保存しました。" : "分析が完了しました。履歴には保存できませんでした。");
     } catch (error) {
       setStatus(error && error.message ? error.message : String(error), true);
     } finally {
@@ -348,6 +536,36 @@
   elements.sort.addEventListener("change", renderGrid);
   elements.search.addEventListener("input", renderGrid);
 
+  elements.historyList.addEventListener("click", (event) => {
+    const openButton = event.target.closest("[data-history-open]");
+    if (openButton) {
+      const entry = state.history.find((item) => item.id === openButton.dataset.historyOpen);
+      if (entry) loadHistoryEntry(entry);
+      return;
+    }
+    const removeButton = event.target.closest("[data-history-remove]");
+    if (!removeButton) return;
+    state.history = state.history.filter((item) => item.id !== removeButton.dataset.historyRemove);
+    try {
+      writeHistory(state.history);
+    } catch {
+      setStatus("履歴を更新できませんでした。", true);
+    }
+    renderHistory();
+  });
+
+  elements.clearHistory.addEventListener("click", () => {
+    if (!state.history.length) return;
+    if (!window.confirm("履歴をすべて削除しますか？")) return;
+    state.history = [];
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+    } catch {
+      setStatus("履歴を削除できませんでした。", true);
+    }
+    renderHistory();
+  });
+
   elements.copyVisible.addEventListener("click", async () => {
     try {
       const items = visibleItems();
@@ -369,4 +587,7 @@
   elements.downloadRanks.addEventListener("click", () => {
     downloadText("result-top3-ranks.txt", core.top3RanksText(state.top3Ranks), "text/plain;charset=utf-8");
   });
+
+  state.history = readHistory();
+  renderHistory();
 })();

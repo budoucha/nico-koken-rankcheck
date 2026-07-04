@@ -49,6 +49,8 @@ for (const required of [
   "id=\"download-contents\"",
   "id=\"download-missing\"",
   "id=\"download-ranks\"",
+  "id=\"history-list\"",
+  "id=\"clear-history\"",
 ]) {
   if (!index.includes(required)) {
     fail(`docs/index.html is missing ${required}`);
@@ -64,6 +66,9 @@ for (const required of [
   "core.csvText",
   "core.spreadsheetText",
   "new Blob",
+  "localStorage",
+  "HISTORY_KEY",
+  "renderHistory",
 ]) {
   if (!app.includes(required)) {
     fail(`docs/app.js is missing ${required}`);

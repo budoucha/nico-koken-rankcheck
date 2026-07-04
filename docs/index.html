@@ -25,18 +25,29 @@
   <main>
     <section class="input-band" aria-labelledby="input-heading">
       <div class="input-inner">
-        <h2 id="input-heading">入力</h2>
+        <div class="input-header">
+          <h2 id="input-heading">入力</h2>
+          <div class="history-actions">
+            <button id="clear-history" class="button" type="button">履歴削除</button>
+          </div>
+        </div>
         <div class="input-grid">
-          <label class="input-panel">
-            <span class="input-label">contents HTML</span>
-            <span class="input-detail">静画・動画など、種別ごとに保存したHTMLを複数選択できます。</span>
-            <input id="contents-files" type="file" accept=".html,text/html" multiple>
-          </label>
-          <label class="input-panel">
-            <span class="input-label">reward HTML</span>
-            <span class="input-detail">貢献成績ページを保存したHTMLを1つ選択します。</span>
-            <input id="reward-file" type="file" accept=".html,text/html">
-          </label>
+          <div class="input-stack">
+            <label class="input-panel">
+              <span class="input-label">contents HTML</span>
+              <span class="input-detail">静画・動画など、種別ごとに保存したHTMLを複数選択できます。</span>
+              <input id="contents-files" type="file" accept=".html,text/html" multiple>
+            </label>
+            <label class="input-panel">
+              <span class="input-label">reward HTML</span>
+              <span class="input-detail">貢献成績ページを保存したHTMLを1つ選択します。</span>
+              <input id="reward-file" type="file" accept=".html,text/html">
+            </label>
+          </div>
+          <section class="history-panel" aria-labelledby="history-heading">
+            <h3 id="history-heading">履歴</h3>
+            <div id="history-list" class="history-list"></div>
+          </section>
         </div>
         <div class="input-actions">
           <button id="analyze" class="button primary" type="button">分析する</button>
