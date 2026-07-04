@@ -2,6 +2,10 @@
   "scripts": {
     "start": "node --watch dev-server.js",
     "start:plain": "node server.js",
-    "generate": "node generate.js"
+    "generate": "node generate.js",
+    "check:compat": "node scripts/check-compatibility-contract.js",
+    "check:lite": "node scripts/check-lite-static.js",
+    "test:core": "node test/compatibility/core.test.js",
+    "test": "npm run test:core && npm run check:compat && npm run check:lite"
   }
 }

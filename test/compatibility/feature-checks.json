@@ -1,0 +1,72 @@
+{
+  "F001": {
+    "level": "contract",
+    "checks": ["feature-matrix", "shared-core-required"],
+    "notes": "Content type definitions must move to shared core before lite implementation starts."
+  },
+  "F002": {
+    "level": "fixture-required",
+    "checks": ["contents-type-detection-fixture"],
+    "notes": "Use saved contents HTML fixtures for seiga and video."
+  },
+  "F003": {
+    "level": "fixture-required",
+    "checks": ["contents-extraction-fixture", "contents-extraction-over-500"],
+    "notes": "Expected rows must include title, URL, IDs, contribution, thumbnail source, type, and no fixed 500-row cap."
+  },
+  "F004": {
+    "level": "fixture-required",
+    "checks": ["reward-rank-fixture"],
+    "notes": "SVG path rank detection is fragile and must be covered."
+  },
+  "F005": {
+    "level": "contract",
+    "checks": ["result-item-schema"],
+    "notes": "Both renderers should consume the same normalized result items."
+  },
+  "F006": {
+    "level": "contract",
+    "checks": ["filter-search-sort-semantics", "contribution-sort-semantics"],
+    "notes": "UI may differ, but visible item semantics must match, including rank and contribution sorting."
+  },
+  "F007": {
+    "level": "platform",
+    "checks": ["upload-validation"],
+    "notes": "Node upload and lite File API should enforce the same input validation expectations."
+  },
+  "F008": {
+    "level": "exception-allowed",
+    "checks": ["capability-exception"],
+    "notes": "Lite persisted history is optional and must be opt-in if added."
+  },
+  "F009": {
+    "level": "contract",
+    "checks": ["csv-columns", "txt-ranks"],
+    "notes": "CSV column order and BOM behavior should stay stable."
+  },
+  "F010": {
+    "level": "contract",
+    "checks": ["clipboard-tsv-columns"],
+    "notes": "Clipboard TSV columns should match the CSV-facing result fields."
+  },
+  "F011": {
+    "level": "platform",
+    "checks": ["viewer-result-operations"],
+    "notes": "Node writes HTML; lite renders DOM. Result operations must stay equivalent."
+  },
+  "F012": {
+    "level": "exception-allowed",
+    "checks": ["capability-exception"],
+    "notes": "Lite local thumbnail reuse depends on user-selected files or directories."
+  },
+  "F013": {
+    "level": "exception-allowed",
+    "checks": ["capability-exception"],
+    "notes": "Lite remote thumbnail enrichment is best-effort because of CORS."
+  },
+  "F014": {
+    "level": "platform",
+    "checks": ["static-hosting-smoke"],
+    "notes": "Lite must work from GitHub Pages without server endpoints."
+  }
+}
