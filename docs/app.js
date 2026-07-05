@@ -36,6 +36,7 @@
     downloadRanks: document.querySelector("#download-ranks"),
     historyList: document.querySelector("#history-list"),
     clearHistory: document.querySelector("#clear-history"),
+    bookmarkletMode: document.querySelector("#bookmarklet-mode"),
     copyBookmarklet: document.querySelector("#copy-bookmarklet"),
   };
 
@@ -540,8 +541,9 @@
 
   elements.copyBookmarklet.addEventListener("click", async () => {
     try {
-      await writeClipboard(bookmarklet.BOOKMARKLET_URL);
-      setStatus("ブックマークレットをコピーしました。ブックマークのURL欄に貼り付けてください。");
+      const selected = bookmarklet.BOOKMARKLETS[elements.bookmarkletMode.value] || bookmarklet.BOOKMARKLETS.current;
+      await writeClipboard(selected.url);
+      setStatus(`${selected.label}ブックマークレットをコピーしました。ブックマークのURL欄に貼り付けてください。`);
     } catch {
       setStatus("ブックマークレットをコピーできませんでした。", true);
     }

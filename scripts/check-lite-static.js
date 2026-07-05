@@ -59,6 +59,7 @@ for (const required of [
   "id=\"download-ranks\"",
   "id=\"history-list\"",
   "id=\"clear-history\"",
+  "id=\"bookmarklet-mode\"",
   "id=\"copy-bookmarklet\"",
 ]) {
   if (!index.includes(required)) {
@@ -79,10 +80,24 @@ for (const required of [
   "HISTORY_KEY",
   "renderHistory",
   "window.KokenBookmarklet",
-  "BOOKMARKLET_URL",
+  "BOOKMARKLETS",
+  "bookmarkletMode",
 ]) {
   if (!app.includes(required)) {
     fail(`docs/app.js is missing ${required}`);
+  }
+}
+
+for (const required of [
+  "BOOKMARKLETS",
+  "current",
+  "scroll",
+  "autoScroll",
+  "scrollToEnd",
+  "一番下まで読み込み中",
+]) {
+  if (!srcBookmarklet.includes(required)) {
+    fail(`src/core/bookmarklet.js is missing ${required}`);
   }
 }
 

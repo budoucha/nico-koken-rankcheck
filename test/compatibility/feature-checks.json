@@ -76,7 +76,7 @@
   },
   "F016": {
     "level": "platform",
-    "checks": ["shared-bookmarklet-source", "node-and-lite-copy-controls"],
-    "notes": "Node and lite should expose the same bookmarklet URL for saving source HTML files from nicokoken pages."
+    "checks": ["shared-bookmarklet-source", "node-and-lite-copy-controls", "scroll-to-bottom-bookmarklet-choice"],
+    "notes": "Node and lite should expose the same bookmarklet choices for saving source HTML files from nicokoken pages."
   }
 }

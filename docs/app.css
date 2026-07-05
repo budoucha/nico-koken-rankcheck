@@ -166,6 +166,11 @@ h2 {
   width: fit-content;
 }
 
+.bookmarklet-mode {
+  display: grid;
+  gap: 6px;
+}
+
 .input-detail {
   display: block;
 }

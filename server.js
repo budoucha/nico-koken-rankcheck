@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { main: generate } = require("./generate");
 const { CONTENT_TYPES, detectContentsType } = require("./src/core/koken-core");
-const { BOOKMARKLET_URL } = require("./src/core/bookmarklet");
+const { BOOKMARKLETS } = require("./src/core/bookmarklet");
 
 const root = __dirname;
 const inputDir = path.join(root, "input");
@@ -184,6 +184,25 @@ function dashboard(message = "") {
     .bookmarklet-card .button {
       margin-top: 10px;
     }
+    .bookmarklet-mode {
+      display: grid;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .bookmarklet-mode span {
+      font-weight: 750;
+      font-size: 13px;
+    }
+    .bookmarklet-mode select {
+      width: min(100%, 320px);
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 10px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+    }
     .bookmarklet-status {
       margin: 8px 0 0;
       color: #075f5e;
@@ -220,7 +239,14 @@ function dashboard(message = "") {
     </div>` : ""}
     <section class="bookmarklet-card" aria-labelledby="bookmarklet-heading">
       <h2 id="bookmarklet-heading">HTML保存ブックマークレット</h2>
-      <p class="note">ボタンでコピーした内容をブラウザのブックマークURLに登録します。ニコニ貢献のcontents/rewardで必要な分だけ読み込んでから、そのブックマークを押すとHTMLファイルを保存できます。保存したHTMLを下の入力欄に指定してください。</p>
+      <p class="note">ボタンでコピーした内容をブラウザのブックマークURLに登録します。ニコニ貢献のcontents/rewardでそのブックマークを押すとHTMLファイルを保存できます。保存したHTMLを下の入力欄に指定してください。</p>
+      <label class="bookmarklet-mode">
+        <span>保存方法</span>
+        <select id="bookmarklet-mode">
+          <option value="current">現在の表示分を保存</option>
+          <option value="scroll">一番下まで読み込んで保存</option>
+        </select>
+      </label>
       <button id="copy-bookmarklet" class="button" type="button">ブックマークレットをコピー</button>
       <p id="bookmarklet-status" class="bookmarklet-status" role="status" aria-live="polite"></p>
     </section>
@@ -259,7 +285,8 @@ function dashboard(message = "") {
   </main>
   <script>
     (() => {
-      const bookmarkletUrl = ${JSON.stringify(BOOKMARKLET_URL)};
+      const bookmarklets = ${JSON.stringify(BOOKMARKLETS)};
+      const mode = document.querySelector("#bookmarklet-mode");
       const button = document.querySelector("#copy-bookmarklet");
       const status = document.querySelector("#bookmarklet-status");
       async function writeClipboard(text) {
@@ -284,8 +311,9 @@ function dashboard(message = "") {
       }
       button.addEventListener("click", async () => {
         try {
-          await writeClipboard(bookmarkletUrl);
-          status.textContent = "コピーしました。ブックマークのURL欄に貼り付けてください。";
+          const selected = bookmarklets[mode.value] || bookmarklets.current;
+          await writeClipboard(selected.url);
+          status.textContent = selected.label + "ブックマークレットをコピーしました。ブックマークのURL欄に貼り付けてください。";
           status.classList.remove("error");
         } catch {
           status.textContent = "コピーできませんでした。";
