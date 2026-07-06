@@ -181,7 +181,8 @@ function dashboard(message = "") {
       font-size: 15px;
       letter-spacing: 0;
     }
-    .bookmarklet-card .button {
+    .bookmarklet-action {
+      width: fit-content;
       margin-top: 10px;
     }
     .bookmarklet-mode {
@@ -239,15 +240,15 @@ function dashboard(message = "") {
     </div>` : ""}
     <section class="bookmarklet-card" aria-labelledby="bookmarklet-heading">
       <h2 id="bookmarklet-heading">HTML保存ブックマークレット</h2>
-      <p class="note">ボタンでコピーした内容をブラウザのブックマークURLに登録します。ニコニ貢献のcontents/rewardでそのブックマークを押すとHTMLファイルを保存できます。保存したHTMLを下の入力欄に指定してください。</p>
+      <p class="note">保存したいニコニ貢献ページを開いてから、このブックマークレットを実行するとHTMLを保存できます。下のボタンはクリックでURLをコピー、ブックマークバーへドラッグで登録できます。アドレスバーに貼り付けて使う場合は、先頭の javascript: を手入力してから続きのURLを貼り付けてください。</p>
       <label class="bookmarklet-mode">
-        <span>保存方法</span>
+        <span>HTML取得方法</span>
         <select id="bookmarklet-mode">
-          <option value="current">現在の表示分を保存</option>
-          <option value="scroll">一番下まで読み込んで保存</option>
+          <option value="current">表示中のHTMLを取得</option>
+          <option value="scroll" selected>自動読み込み後にHTMLを取得</option>
         </select>
       </label>
-      <button id="copy-bookmarklet" class="button" type="button">ブックマークレットをコピー</button>
+      <a id="bookmarklet-action" class="button bookmarklet-action" href="#">ニコニ貢献HTML取得（自動）</a>
       <p id="bookmarklet-status" class="bookmarklet-status" role="status" aria-live="polite"></p>
     </section>
     <section class="upload-grid">
@@ -287,8 +288,18 @@ function dashboard(message = "") {
     (() => {
       const bookmarklets = ${JSON.stringify(BOOKMARKLETS)};
       const mode = document.querySelector("#bookmarklet-mode");
-      const button = document.querySelector("#copy-bookmarklet");
+      const action = document.querySelector("#bookmarklet-action");
       const status = document.querySelector("#bookmarklet-status");
+      function selectedBookmarklet() {
+        return bookmarklets[mode.value] || bookmarklets.scroll || bookmarklets.current;
+      }
+      function updateBookmarkletAction() {
+        const selected = selectedBookmarklet();
+        const title = selected.bookmarkTitle || selected.label;
+        action.href = selected.url;
+        action.title = title;
+        action.textContent = title;
+      }
       async function writeClipboard(text) {
         if (navigator.clipboard && window.isSecureContext) {
           try {
@@ -309,17 +320,20 @@ function dashboard(message = "") {
         textarea.remove();
         if (!copied) throw new Error("copy failed");
       }
-      button.addEventListener("click", async () => {
+      mode.addEventListener("change", updateBookmarkletAction);
+      action.addEventListener("click", async (event) => {
+        event.preventDefault();
         try {
-          const selected = bookmarklets[mode.value] || bookmarklets.current;
+          const selected = selectedBookmarklet();
           await writeClipboard(selected.url);
-          status.textContent = selected.label + "ブックマークレットをコピーしました。ブックマークのURL欄に貼り付けてください。";
+          status.textContent = selected.label + "ブックマークレットをコピーしました。ブックマークバーへドラッグして登録することもできます。";
           status.classList.remove("error");
         } catch {
           status.textContent = "コピーできませんでした。";
           status.classList.add("error");
         }
       });
+      updateBookmarkletAction();
     })();
   </script>
 </body>

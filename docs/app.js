@@ -37,7 +37,7 @@
     historyList: document.querySelector("#history-list"),
     clearHistory: document.querySelector("#clear-history"),
     bookmarkletMode: document.querySelector("#bookmarklet-mode"),
-    copyBookmarklet: document.querySelector("#copy-bookmarklet"),
+    bookmarkletAction: document.querySelector("#bookmarklet-action"),
   };
 
   let copyStatusTimer = 0;
@@ -477,6 +477,20 @@
     if (!copied) throw new Error("copy failed");
   }
 
+  function selectedBookmarklet() {
+    return bookmarklet.BOOKMARKLETS[elements.bookmarkletMode.value] ||
+      bookmarklet.BOOKMARKLETS.scroll ||
+      bookmarklet.BOOKMARKLETS.current;
+  }
+
+  function updateBookmarkletAction() {
+    const selected = selectedBookmarklet();
+    const title = selected.bookmarkTitle || selected.label;
+    elements.bookmarkletAction.href = selected.url;
+    elements.bookmarkletAction.title = title;
+    elements.bookmarkletAction.textContent = title;
+  }
+
   function downloadText(fileName, text, type) {
     const blob = new Blob([text], { type });
     const url = URL.createObjectURL(blob);
@@ -539,15 +553,18 @@
   elements.sort.addEventListener("change", renderGrid);
   elements.search.addEventListener("input", renderGrid);
 
-  elements.copyBookmarklet.addEventListener("click", async () => {
+  elements.bookmarkletAction.addEventListener("click", async (event) => {
+    event.preventDefault();
     try {
-      const selected = bookmarklet.BOOKMARKLETS[elements.bookmarkletMode.value] || bookmarklet.BOOKMARKLETS.current;
+      const selected = selectedBookmarklet();
       await writeClipboard(selected.url);
-      setStatus(`${selected.label}ブックマークレットをコピーしました。ブックマークのURL欄に貼り付けてください。`);
+      setStatus(`${selected.label}ブックマークレットをコピーしました。ブックマークバーへドラッグして登録することもできます。`);
     } catch {
       setStatus("ブックマークレットをコピーできませんでした。", true);
     }
   });
+
+  elements.bookmarkletMode.addEventListener("change", updateBookmarkletAction);
 
   elements.historyList.addEventListener("click", (event) => {
     const openButton = event.target.closest("[data-history-open]");
@@ -603,4 +620,5 @@
 
   state.history = readHistory();
   renderHistory();
+  updateBookmarkletAction();
 })();

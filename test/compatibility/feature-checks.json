@@ -76,7 +76,17 @@
   },
   "F016": {
     "level": "platform",
-    "checks": ["shared-bookmarklet-source", "node-and-lite-copy-controls", "scroll-to-bottom-bookmarklet-choice"],
-    "notes": "Node and lite should expose the same bookmarklet choices for saving source HTML files from nicokoken pages."
+    "checks": [
+      "shared-bookmarklet-source",
+      "node-and-lite-click-copy-drag-register-action",
+      "descriptive-drag-bookmark-title",
+      "auto-load-bookmarklet-default",
+      "bookmarklet-registration-and-usage-guidance",
+      "scroll-to-bottom-bookmarklet-choice",
+      "load-more-button-detection",
+      "reward-content-tab-selection",
+      "reward-under-100-stop"
+    ],
+    "notes": "Node and lite should expose the same bookmarklet choices for saving source HTML files from nicokoken pages, including one click-copy/drag-register action, descriptive bookmark titles, load-more handling, and reward auto-scroll stop conditions."
   }
 }

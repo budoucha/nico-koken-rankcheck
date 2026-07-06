@@ -46,15 +46,15 @@
             </label>
             <section class="input-panel bookmarklet-panel" aria-labelledby="bookmarklet-heading">
               <h3 id="bookmarklet-heading">HTML保存ブックマークレット</h3>
-              <p class="input-detail">コピーした内容をブラウザのブックマークURLに登録します。ニコニ貢献のcontents/rewardでそのブックマークを押すとHTMLファイルを保存できます。</p>
+              <p class="input-detail">保存したいニコニ貢献ページを開いてから、このブックマークレットを実行するとHTMLを保存できます。下のボタンはクリックでURLをコピー、ブックマークバーへドラッグで登録できます。アドレスバーに貼り付けて使う場合は、先頭の javascript: を手入力してから続きのURLを貼り付けてください。</p>
               <label class="bookmarklet-mode">
-                <span class="input-label">保存方法</span>
+                <span class="input-label">HTML取得方法</span>
                 <select id="bookmarklet-mode">
-                  <option value="current">現在の表示分を保存</option>
-                  <option value="scroll">一番下まで読み込んで保存</option>
+                  <option value="current">表示中のHTMLを取得</option>
+                  <option value="scroll" selected>自動読み込み後にHTMLを取得</option>
                 </select>
               </label>
-              <button id="copy-bookmarklet" class="button" type="button">ブックマークレットをコピー</button>
+              <a id="bookmarklet-action" class="button bookmarklet-action" href="#">ニコニ貢献HTML取得（自動）</a>
             </section>
           </div>
           <section class="history-panel" aria-labelledby="history-heading">

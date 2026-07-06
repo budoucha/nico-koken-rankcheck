@@ -162,8 +162,9 @@ h2 {
   letter-spacing: 0;
 }
 
-.bookmarklet-panel .button {
+.bookmarklet-action {
   width: fit-content;
+  margin-top: 2px;
 }
 
 .bookmarklet-mode {
