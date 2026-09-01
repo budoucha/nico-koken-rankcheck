@@ -181,7 +181,10 @@ function thumbnailForLocalOrSaved(contentsPath, item) {
 
 function generateViewer(items, stats) {
   const cards = items.map((item) => `
-        <article class="card" data-type="${escapeHtml(item.type)}" data-in-top3="${item.inTop3 ? "true" : "false"}" data-rank="${item.rank || 0}" data-index="${escapeHtml(item.globalIndex)}" data-contribution="${contributionSortValue(item.totalContribution)}" data-title="${escapeHtml(item.title.toLowerCase())}" data-id="${escapeHtml(item.contentId.toLowerCase())}" data-copy-id="${escapeHtml(item.contentId)}" data-copy-title="${escapeHtml(item.title)}" data-copy-contribution="${escapeHtml(item.totalContribution)}" data-copy-url="${escapeHtml(item.url)}" data-copy-nicoad-url="${escapeHtml(item.nicoadUrl)}">
+        <article class="card" data-selection-key="${escapeHtml(item.key)}" data-type="${escapeHtml(item.type)}" data-in-top3="${item.inTop3 ? "true" : "false"}" data-rank="${item.rank || 0}" data-index="${escapeHtml(item.globalIndex)}" data-contribution="${contributionSortValue(item.totalContribution)}" data-title="${escapeHtml(item.title.toLowerCase())}" data-id="${escapeHtml(item.contentId.toLowerCase())}" data-copy-id="${escapeHtml(item.contentId)}" data-copy-title="${escapeHtml(item.title)}" data-copy-contribution="${escapeHtml(item.totalContribution)}" data-copy-url="${escapeHtml(item.url)}" data-copy-nicoad-url="${escapeHtml(item.nicoadUrl)}">
+          <label class="selection-control">
+            <input class="selection-checkbox" type="checkbox" aria-label="${escapeHtml(item.title)}を選択">
+          </label>
           <a class="thumb-link" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(item.title)}を開く">
             <img class="thumb" src="${escapeHtml(item.thumbnail)}" alt="" loading="lazy">
           </a>
@@ -215,6 +218,7 @@ function generateViewer(items, stats) {
       --muted: #69757d;
       --line: #dce2e6;
       --accent: #0a7c7b;
+      --soft: #eef7f7;
       --danger: #bf3434;
       --shadow: 0 1px 2px rgba(20, 30, 40, .08);
     }
@@ -325,6 +329,15 @@ function generateViewer(items, stats) {
       gap: 12px;
       align-items: center;
     }
+    .selection-actions,
+    .copy-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      grid-column: 1 / -1;
+    }
+    .selection-only[hidden] { display: none; }
     .segmented {
       display: inline-grid;
       grid-template-columns: repeat(6, minmax(76px, 1fr));
@@ -389,6 +402,7 @@ function generateViewer(items, stats) {
     }
     .card {
       display: grid;
+      position: relative;
       grid-template-columns: 96px 1fr;
       gap: 12px;
       min-width: 0;
@@ -397,6 +411,34 @@ function generateViewer(items, stats) {
       border-radius: 8px;
       background: var(--panel);
       box-shadow: var(--shadow);
+    }
+    .selection-control {
+      display: none;
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      z-index: 1;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+    }
+    .selection-mode .selection-control { display: flex; }
+    .selection-mode .card.is-selected {
+      border-color: var(--accent);
+      background: var(--soft);
+    }
+    .selection-checkbox {
+      width: 17px;
+      height: 17px;
+      margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
     }
     .thumb-link {
       display: block;
@@ -604,7 +646,15 @@ function generateViewer(items, stats) {
         <option value="contribution-desc">獲得貢が多い順</option>
       </select>
       <input id="search" type="search" placeholder="タイトルまたはIDで検索">
-      <button class="button" type="button" id="copy-spreadsheet">表示中の結果をコピー</button>
+      <div class="selection-actions">
+        <button class="button" type="button" id="selection-toggle" aria-controls="grid" aria-pressed="false">選択する</button>
+        <button class="button selection-only" type="button" id="selection-select-all" hidden>すべて選択</button>
+        <button class="button selection-only" type="button" id="selection-clear" hidden>選択解除</button>
+      </div>
+      <div class="copy-actions">
+        <button class="button" type="button" id="copy-spreadsheet">表示中をコピー</button>
+        <button class="button selection-only" type="button" id="copy-selected" hidden>選択中をコピー</button>
+      </div>
     </div>
   </header>
   <main>
@@ -622,12 +672,18 @@ ${cards}
     const sort = document.querySelector("#sort");
     const count = document.querySelector("#visible-count");
     const copyButton = document.querySelector("#copy-spreadsheet");
+    const copySelectedButton = document.querySelector("#copy-selected");
     const copyStatus = document.querySelector("#copy-status");
+    const selectionToggle = document.querySelector("#selection-toggle");
+    const selectionSelectAll = document.querySelector("#selection-select-all");
+    const selectionClear = document.querySelector("#selection-clear");
     const pageHeader = document.querySelector("header");
     const controlsToggle = document.querySelector("#controls-toggle");
     const controlsSummary = document.querySelector("#controls-summary");
     let activeFilter = "missing";
     let activeTypeFilter = "all";
+    let selectionMode = false;
+    let selectedKeys = new Set();
     let copyStatusTimer = 0;
 
     function spreadsheetCell(value) {
@@ -638,9 +694,9 @@ ${cards}
       return [...grid.querySelectorAll(".card:not(.hidden)")];
     }
 
-    function spreadsheetText() {
+    function spreadsheetText(sourceCards = visibleCardsInOrder()) {
       const rows = [["id", "タイトル", "コンテンツのURL", "獲得貢", "広告画面のURL"]];
-      for (const card of visibleCardsInOrder()) {
+      for (const card of sourceCards) {
         rows.push([
           card.dataset.copyId,
           card.dataset.copyTitle,
@@ -650,6 +706,54 @@ ${cards}
         ]);
       }
       return rows.map((row) => row.map(spreadsheetCell).join("\\t")).join("\\n");
+    }
+
+    function selectedCardsInOrder() {
+      return visibleCardsInOrder().filter((card) => selectedKeys.has(card.dataset.selectionKey));
+    }
+
+    function updateSelectionCheckboxes() {
+      for (const card of cards) {
+        const checkbox = card.querySelector(".selection-checkbox");
+        const selected = selectionMode && selectedKeys.has(card.dataset.selectionKey);
+        checkbox.checked = selected;
+        card.classList.toggle("is-selected", selected);
+      }
+    }
+
+    function pruneSelectionToVisibleCards() {
+      const visibleKeys = new Set(visibleCardsInOrder().map((card) => card.dataset.selectionKey));
+      selectedKeys = new Set([...selectedKeys].filter((key) => visibleKeys.has(key)));
+      updateSelectionCheckboxes();
+    }
+
+    function updateSelectionUi() {
+      document.body.classList.toggle("selection-mode", selectionMode);
+      selectionToggle.textContent = selectionMode ? "選択をやめる" : "選択する";
+      selectionToggle.setAttribute("aria-pressed", String(selectionMode));
+      selectionSelectAll.hidden = !selectionMode;
+      selectionClear.hidden = !selectionMode;
+      copySelectedButton.hidden = !selectionMode;
+      updateSelectionCheckboxes();
+    }
+
+    function setSelectionMode(enabled) {
+      selectionMode = enabled;
+      if (enabled) {
+        selectedKeys = new Set(visibleCardsInOrder().map((card) => card.dataset.selectionKey));
+      } else {
+        selectedKeys.clear();
+      }
+      updateSelectionUi();
+    }
+
+    function setVisibleSelection(selected) {
+      for (const card of visibleCardsInOrder()) {
+        const key = card.dataset.selectionKey;
+        if (selected) selectedKeys.add(key);
+        else selectedKeys.delete(key);
+      }
+      updateSelectionCheckboxes();
     }
 
     async function writeClipboard(text) {
@@ -746,6 +850,7 @@ ${cards}
         if (show) visible += 1;
       }
       count.textContent = String(visible);
+      if (selectionMode) pruneSelectionToVisibleCards();
       updateControlsSummary();
     }
 
@@ -763,11 +868,34 @@ ${cards}
         applyFilter();
       });
     });
+    selectionToggle.addEventListener("click", () => setSelectionMode(!selectionMode));
+    selectionSelectAll.addEventListener("click", () => setVisibleSelection(true));
+    selectionClear.addEventListener("click", () => setVisibleSelection(false));
+    grid.addEventListener("change", (event) => {
+      const checkbox = event.target.closest(".selection-checkbox");
+      if (!checkbox || !selectionMode) return;
+      const card = checkbox.closest(".card");
+      if (!card) return;
+      const key = card.dataset.selectionKey;
+      if (checkbox.checked) selectedKeys.add(key);
+      else selectedKeys.delete(key);
+      card.classList.toggle("is-selected", checkbox.checked);
+    });
     copyButton.addEventListener("click", async () => {
       const visibleCount = visibleCardsInOrder().length;
       try {
         await writeClipboard(spreadsheetText());
         setCopyStatus(visibleCount + "件をコピーしました");
+      } catch (error) {
+        setCopyStatus("コピーできませんでした");
+        alert("クリップボードへのコピーに失敗しました。ブラウザの権限設定を確認してください。");
+      }
+    });
+    copySelectedButton.addEventListener("click", async () => {
+      const selectedCards = selectedCardsInOrder();
+      try {
+        await writeClipboard(spreadsheetText(selectedCards));
+        setCopyStatus(selectedCards.length + "件をコピーしました");
       } catch (error) {
         setCopyStatus("コピーできませんでした");
         alert("クリップボードへのコピーに失敗しました。ブラウザの権限設定を確認してください。");
@@ -792,6 +920,7 @@ ${cards}
     }
     sort.addEventListener("change", applyFilter);
     search.addEventListener("input", applyFilter);
+    updateSelectionUi();
     applyFilter();
   </script>
 </body>

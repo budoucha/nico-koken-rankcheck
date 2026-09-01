@@ -290,6 +290,19 @@ input[type="file"] {
   margin-bottom: 12px;
 }
 
+.selection-actions,
+.copy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.selection-only[hidden] {
+  display: none;
+}
+
 .segmented {
   display: inline-grid;
   grid-column: 1 / -1;
@@ -354,6 +367,7 @@ input[type="search"] {
 
 .card {
   display: grid;
+  position: relative;
   grid-template-columns: 96px 1fr;
   gap: 12px;
   min-width: 0;
@@ -362,6 +376,40 @@ input[type="search"] {
   border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow);
+}
+
+.selection-control {
+  display: none;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.selection-mode .selection-control {
+  display: flex;
+}
+
+.selection-mode .card.is-selected {
+  border-color: var(--accent);
+  background: var(--soft);
+}
+
+.selection-checkbox {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .thumb-link {

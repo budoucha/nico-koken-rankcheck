@@ -100,7 +100,15 @@
           <option value="contribution-asc">獲得貢が少ない順</option>
         </select>
         <input id="search" type="search" placeholder="タイトルまたはIDで検索" aria-label="検索">
-        <button id="copy-visible" class="button" type="button">表示中をコピー</button>
+        <div class="selection-actions">
+          <button id="selection-toggle" class="button" type="button" aria-controls="grid" aria-pressed="false">選択する</button>
+          <button id="selection-select-all" class="button selection-only" type="button" hidden>すべて選択</button>
+          <button id="selection-clear" class="button selection-only" type="button" hidden>選択解除</button>
+        </div>
+        <div class="copy-actions">
+          <button id="copy-visible" class="button" type="button">表示中をコピー</button>
+          <button id="copy-selected" class="button selection-only" type="button" hidden>選択中をコピー</button>
+        </div>
       </div>
 
       <p class="result-line"><span id="visible-count">0</span>件表示<span id="copy-status"></span></p>

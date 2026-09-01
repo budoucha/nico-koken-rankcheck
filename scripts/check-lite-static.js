@@ -8,6 +8,7 @@ const docsCorePath = path.join(docsDir, "koken-core.js");
 const srcBookmarkletPath = path.join(root, "src", "core", "bookmarklet.js");
 const docsBookmarkletPath = path.join(docsDir, "bookmarklet.js");
 const serverPath = path.join(root, "server.js");
+const generatePath = path.join(root, "generate.js");
 const indexPath = path.join(docsDir, "index.html");
 const appCssPath = path.join(docsDir, "app.css");
 const appJsPath = path.join(docsDir, "app.js");
@@ -21,7 +22,7 @@ function fail(message) {
   process.exitCode = 1;
 }
 
-for (const filePath of [srcCorePath, docsCorePath, srcBookmarkletPath, docsBookmarkletPath, serverPath, indexPath, appCssPath, appJsPath]) {
+for (const filePath of [srcCorePath, docsCorePath, srcBookmarkletPath, docsBookmarkletPath, serverPath, generatePath, indexPath, appCssPath, appJsPath]) {
   if (!fs.existsSync(filePath)) {
     fail(`missing required file: ${path.relative(root, filePath)}`);
   }
@@ -34,6 +35,7 @@ const docsCore = read(docsCorePath);
 const srcBookmarklet = read(srcBookmarkletPath);
 const docsBookmarklet = read(docsBookmarkletPath);
 const server = read(serverPath);
+const generate = read(generatePath);
 const index = read(indexPath);
 const app = read(appJsPath);
 
@@ -78,6 +80,33 @@ for (const required of [
 }
 
 for (const required of [
+  "id=\"selection-toggle\"",
+  "id=\"selection-select-all\"",
+  "id=\"selection-clear\"",
+  "id=\"copy-selected\"",
+  "選択する",
+  "すべて選択",
+  "選択解除",
+  "選択中をコピー",
+]) {
+  if (!index.includes(required)) {
+    fail(`docs/index.html is missing ${required}`);
+  }
+  if (!generate.includes(required)) {
+    fail(`generate.js is missing ${required}`);
+  }
+}
+
+for (const required of ["選択をやめる"]) {
+  if (!app.includes(required)) {
+    fail(`docs/app.js is missing ${required}`);
+  }
+  if (!generate.includes(required)) {
+    fail(`generate.js is missing ${required}`);
+  }
+}
+
+for (const required of [
   "id=\"bookmarklet-mode\"",
   "id=\"bookmarklet-action\"",
   "value=\"scroll\" selected",
@@ -114,6 +143,15 @@ for (const required of [
   "updateBookmarkletAction",
   "preventDefault",
   "ブックマークバーへドラッグ",
+  "selectionMode",
+  "selectedKeys",
+  "selectionToggle",
+  "copySelected",
+  "selectedVisibleItems",
+  "selection-select-all",
+  "selection-clear",
+  "copy-selected",
+  "data-selection-key",
 ]) {
   if (!app.includes(required)) {
     fail(`docs/app.js is missing ${required}`);

@@ -46,13 +46,13 @@
   },
   "F010": {
     "level": "contract",
-    "checks": ["clipboard-tsv-columns"],
-    "notes": "Clipboard TSV columns should match the CSV-facing result fields."
+    "checks": ["clipboard-tsv-columns", "selected-clipboard-tsv-columns"],
+    "notes": "Clipboard TSV columns should match the CSV-facing result fields for visible and selected visible rows."
   },
   "F011": {
     "level": "platform",
-    "checks": ["viewer-result-operations"],
-    "notes": "Node writes HTML; lite renders DOM. Result operations must stay equivalent."
+    "checks": ["viewer-result-operations", "selection-mode-controls"],
+    "notes": "Node writes HTML; lite renders DOM. Result operations and selection controls must stay equivalent."
   },
   "F012": {
     "level": "exception-allowed",
@@ -88,5 +88,10 @@
       "reward-under-100-stop"
     ],
     "notes": "Node and lite should expose the same bookmarklet choices for saving source HTML files from nicokoken pages, including one click-copy/drag-register action, descriptive bookmark titles, load-more handling, and reward auto-scroll stop conditions."
+  },
+  "F017": {
+    "level": "platform",
+    "checks": ["selection-mode-controls", "selected-clipboard-copy", "visible-selection-lifecycle"],
+    "notes": "Both viewers must support visible-only selection, bulk selection controls, and selected-item clipboard copying without changing result schemas or history data."
   }
 }

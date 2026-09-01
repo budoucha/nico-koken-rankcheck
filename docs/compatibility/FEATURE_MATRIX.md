@@ -35,10 +35,11 @@ Source values:
 | F007 | upload and input selection | platform | required | required | Node accepts uploads and stores files; lite uses File API. Same validation expectations. |
 | F008 | persisted input history | platform | required | optional | Node persists to `input/`; lite may use browser storage only with explicit user consent. |
 | F009 | CSV/TXT export | core | required | required | Same columns and UTF-8 BOM for CSV. Node writes files; lite downloads blobs. |
-| F010 | spreadsheet clipboard copy | core | required | required | Same tab-separated columns for visible rows. |
-| F011 | result HTML/viewer rendering | platform | required | required | Node generates `result.html`; lite renders in the current page. Both expose equivalent result operations. |
+| F010 | spreadsheet clipboard copy | core | required | required | Same tab-separated columns for visible rows and selected visible rows. |
+| F011 | result HTML/viewer rendering | platform | required | required | Node generates `result.html`; lite renders in the current page. Both expose equivalent result operations, including visible item selection and selected-item copy. |
 | F012 | local saved thumbnail reuse | platform | required | best-effort | Node can copy local files. Lite can only use user-selected files or visible URLs. |
 | F013 | remote/video thumbnail fallback | platform | required | best-effort | Lite must tolerate CORS/API failures without breaking analysis. |
 | F014 | GitHub Pages static deployment | lite-first | optional | required | Lite version must run from static hosting without a server. |
 | F015 | lite result history | lite-first | optional | required | Lite stores parsed result data in `localStorage` for reopening past analyses. Raw uploaded HTML must not be persisted. |
 | F016 | source HTML bookmarklet | platform | required | required | Both versions expose the same bookmarklet choices for saving the current nicokoken page HTML as an uploadable file. The default choice should automatically load before saving, and one action should support click-to-copy plus drag-to-bookmark registration with a descriptive bookmark title. The auto-load choice should click detected load-more controls, select the reward content tab when needed, and stop reward scrolling after detecting a contribution below 100. |
+| F017 | result item selection mode | platform | required | required | Both viewers can select visible result items, apply visible-only bulk selection changes, and copy the selected visible items with the F010 TSV contract. Selection is view-local and is not persisted in lite history. |

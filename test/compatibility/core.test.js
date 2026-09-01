@@ -135,6 +135,11 @@ const tsv = core.spreadsheetText(items);
 assert.ok(tsv.startsWith("id\tタイトル\tコンテンツのURL\t獲得貢\t広告画面のURL"));
 assert.ok(tsv.includes("im11529455\tテスト&静画"));
 
+const selectedTsv = core.spreadsheetText(items.filter((item) => item.key === "video:46001796"));
+assert.ok(selectedTsv.startsWith("id\tタイトル\tコンテンツのURL\t獲得貢\t広告画面のURL"));
+assert.ok(selectedTsv.includes("sm46001796\tテスト動画"));
+assert.ok(!selectedTsv.includes("im11529455\tテスト&静画"));
+
 const ranksText = core.top3RanksText(ranks);
 assert.ok(ranksText.includes("seiga:11529455,1"));
 assert.ok(ranksText.includes("video:46001796,2"));

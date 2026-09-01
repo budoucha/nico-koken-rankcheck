@@ -13,6 +13,8 @@
     rewardName: "",
     rankFilter: "missing",
     typeFilter: "all",
+    selectionMode: false,
+    selectedKeys: new Set(),
     history: [],
   };
 
@@ -30,7 +32,11 @@
     typeFilter: document.querySelector("#type-filter"),
     sort: document.querySelector("#sort"),
     search: document.querySelector("#search"),
+    selectionToggle: document.querySelector("#selection-toggle"),
+    selectionSelectAll: document.querySelector("#selection-select-all"),
+    selectionClear: document.querySelector("#selection-clear"),
     copyVisible: document.querySelector("#copy-visible"),
+    copySelected: document.querySelector("#copy-selected"),
     downloadContents: document.querySelector("#download-contents"),
     downloadMissing: document.querySelector("#download-missing"),
     downloadRanks: document.querySelector("#download-ranks"),
@@ -159,6 +165,8 @@
       rewardName: entry.rewardName || "",
       rankFilter: "missing",
       typeFilter: "all",
+      selectionMode: false,
+      selectedKeys: new Set(),
     });
     resetControls();
     renderAll();
@@ -347,6 +355,17 @@
   function cardFor(item) {
     const article = document.createElement("article");
     article.className = "card";
+    article.setAttribute("data-selection-key", item.key);
+    article.classList.toggle("is-selected", state.selectionMode && state.selectedKeys.has(item.key));
+
+    const selectionControl = document.createElement("label");
+    selectionControl.className = "selection-control";
+    const checkbox = document.createElement("input");
+    checkbox.className = "selection-checkbox";
+    checkbox.type = "checkbox";
+    checkbox.checked = state.selectionMode && state.selectedKeys.has(item.key);
+    checkbox.setAttribute("aria-label", `${item.title}を選択`);
+    selectionControl.appendChild(checkbox);
 
     const thumbLink = document.createElement("a");
     thumbLink.className = "thumb-link";
@@ -408,7 +427,7 @@
     actions.appendChild(ad);
     content.appendChild(actions);
 
-    article.append(thumbLink, content);
+    article.append(selectionControl, thumbLink, content);
     return article;
   }
 
@@ -419,6 +438,31 @@
     return span;
   }
 
+  function pruneSelectionToVisibleItems(items) {
+    const visibleKeys = new Set(items.map((item) => item.key));
+    state.selectedKeys = new Set([...state.selectedKeys].filter((key) => visibleKeys.has(key)));
+  }
+
+  function renderSelectionUi() {
+    elements.results.classList.toggle("selection-mode", state.selectionMode);
+    elements.selectionToggle.textContent = state.selectionMode ? "選択をやめる" : "選択する";
+    elements.selectionToggle.setAttribute("aria-pressed", String(state.selectionMode));
+    elements.selectionSelectAll.hidden = !state.selectionMode;
+    elements.selectionClear.hidden = !state.selectionMode;
+    elements.copySelected.hidden = !state.selectionMode;
+  }
+
+  function setSelectionMode(enabled) {
+    state.selectionMode = enabled;
+    if (enabled) {
+      state.selectedKeys = new Set(visibleItems().map((item) => item.key));
+    } else {
+      state.selectedKeys.clear();
+    }
+    renderSelectionUi();
+    renderGrid();
+  }
+
   function renderGrid() {
     const visible = core.applyResultOperations(state.items, {
       rankFilter: state.rankFilter,
@@ -426,6 +470,7 @@
       query: elements.search.value,
       sort: elements.sort.value,
     });
+    if (state.selectionMode) pruneSelectionToVisibleItems(visible);
     elements.visibleCount.textContent = String(visible.length);
     elements.grid.replaceChildren();
     if (!visible.length) {
@@ -443,6 +488,7 @@
   function renderAll() {
     renderTypeFilters(state.items);
     renderSummary();
+    renderSelectionUi();
     renderGrid();
     elements.results.classList.remove("hidden");
   }
@@ -454,6 +500,10 @@
       query: elements.search.value,
       sort: elements.sort.value,
     });
+  }
+
+  function selectedVisibleItems() {
+    return visibleItems().filter((item) => state.selectedKeys.has(item.key));
   }
 
   async function writeClipboard(text) {
@@ -519,6 +569,8 @@
       Object.assign(state, result, {
         rankFilter: "missing",
         typeFilter: "all",
+        selectionMode: false,
+        selectedKeys: new Set(),
       });
       resetControls();
       renderAll();
@@ -548,6 +600,31 @@
       item.setAttribute("aria-pressed", String(item === button));
     });
     renderGrid();
+  });
+
+  elements.selectionToggle.addEventListener("click", () => setSelectionMode(!state.selectionMode));
+
+  elements.selectionSelectAll.addEventListener("click", () => {
+    if (!state.selectionMode) return;
+    for (const item of visibleItems()) state.selectedKeys.add(item.key);
+    renderGrid();
+  });
+
+  elements.selectionClear.addEventListener("click", () => {
+    if (!state.selectionMode) return;
+    for (const item of visibleItems()) state.selectedKeys.delete(item.key);
+    renderGrid();
+  });
+
+  elements.grid.addEventListener("change", (event) => {
+    const checkbox = event.target.closest(".selection-checkbox");
+    if (!checkbox || !state.selectionMode) return;
+    const card = checkbox.closest(".card");
+    if (!card) return;
+    const key = card.dataset.selectionKey;
+    if (checkbox.checked) state.selectedKeys.add(key);
+    else state.selectedKeys.delete(key);
+    card.classList.toggle("is-selected", checkbox.checked);
   });
 
   elements.sort.addEventListener("change", renderGrid);
@@ -599,6 +676,16 @@
   elements.copyVisible.addEventListener("click", async () => {
     try {
       const items = visibleItems();
+      await writeClipboard(core.spreadsheetText(items));
+      setCopyStatus(`${items.length}件をコピーしました`);
+    } catch {
+      setCopyStatus("コピーできませんでした");
+    }
+  });
+
+  elements.copySelected.addEventListener("click", async () => {
+    try {
+      const items = selectedVisibleItems();
       await writeClipboard(core.spreadsheetText(items));
       setCopyStatus(`${items.length}件をコピーしました`);
     } catch {
