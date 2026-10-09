@@ -6,6 +6,7 @@
     "check:compat": "node scripts/check-compatibility-contract.js",
     "check:lite": "node scripts/check-lite-static.js",
     "test:core": "node test/compatibility/core.test.js",
-    "test": "npm run test:core && npm run check:compat && npm run check:lite"
+    "test:bookmarklet": "node test/compatibility/bookmarklet.test.js",
+    "test": "npm run test:core && npm run test:bookmarklet && npm run check:compat && npm run check:lite"
   }
 }

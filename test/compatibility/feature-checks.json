@@ -85,9 +85,9 @@
       "scroll-to-bottom-bookmarklet-choice",
       "load-more-button-detection",
       "reward-content-tab-selection",
-      "reward-under-100-stop"
+      "reward-under-100-stop", "delayed-load-more-and-slow-response", "unchanged-height-item-progress", "pending-load-no-duplicate-click", "over-120-load-iterations", "loading-timeout-no-download"
     ],
-    "notes": "Node and lite should expose the same bookmarklet choices for saving source HTML files from nicokoken pages, including one click-copy/drag-register action, descriptive bookmark titles, load-more handling, and reward auto-scroll stop conditions."
+    "notes": "Node and lite should expose the same bookmarklet choices for saving source HTML files from nicokoken pages, including one click-copy/drag-register action, descriptive bookmark titles, load-more handling, and reward auto-scroll stop conditions. Generated-source behavior is exercised by test/compatibility/bookmarklet.test.js with virtual-clock page fixtures."
   },
   "F017": {
     "level": "platform",

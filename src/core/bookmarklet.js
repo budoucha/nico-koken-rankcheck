@@ -18,6 +18,7 @@
     function showNotice(message) {
       if (!notice) {
         notice = document.createElement("div");
+        notice.id = "koken-bookmarklet-notice";
         notice.style.position = "fixed";
         notice.style.right = "16px";
         notice.style.bottom = "16px";
@@ -84,10 +85,10 @@
       tab.click();
       await wait(800);
     }
-    function findLoadMoreButton() {
+    function findLoadMoreButton(includeDisabled = false) {
       const buttons = uniqueElements([
         ...document.querySelectorAll(".next-loading-button button, button[class*='next'], button[class*='more'], button[class*='load'], button"),
-      ]).filter((button) => isVisible(button) && isEnabledButton(button));
+      ]).filter((button) => isVisible(button) && (includeDisabled || isEnabledButton(button)));
       const matches = buttons.filter((button) => {
         const text = normalizedText(button);
         const classText = [
@@ -110,8 +111,16 @@
       button.scrollIntoView({ block: "center" });
       await wait(100);
       button.click();
-      await wait(1200);
       return true;
+    }
+    function contentProgress() {
+      return pageHeight() + ":" + document.querySelectorAll(".reward-list li, .content-area li").length;
+    }
+    function isLoading() {
+      const button = findLoadMoreButton(true);
+      return (button && !isEnabledButton(button)) || [...document.querySelectorAll(
+        "main [aria-busy='true'], main [role='progressbar'], .next-loading-button [aria-busy='true']"
+      )].some(isVisible);
     }
     function contributionNumber(text) {
       const normalized = String(text || "").replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0));
@@ -131,9 +140,14 @@
     async function scrollToEnd() {
       await ensureRewardContentsTab();
       showNotice("一番下まで読み込み中...");
-      let lastHeight = 0;
-      let stableCount = 0;
-      for (let index = 0; index < 120; index += 1) {
+      const idleWait = 10000;
+      const loadingTimeout = 60000;
+      const deadline = Date.now() + 10 * 60 * 1000;
+      let lastProgress = contentProgress();
+      let idleSince = Date.now();
+      let pendingSince = null;
+      let busySince = null;
+      while (true) {
         if (hasRewardContributionBelow(100)) {
           showNotice("100貢未満を検知したため保存します...");
           await wait(700);
@@ -147,21 +161,39 @@
           await wait(700);
           break;
         }
-        const clicked = await clickLoadMoreIfAvailable();
-        const currentHeight = pageHeight();
-        const atBottom = window.scrollY + window.innerHeight >= currentHeight - 4;
-        if (clicked) {
-          stableCount = 0;
-          lastHeight = currentHeight;
+        const now = Date.now();
+        const progress = contentProgress();
+        if (progress !== lastProgress) {
+          lastProgress = progress;
+          idleSince = now;
+          pendingSince = null;
+          busySince = null;
+        }
+        const loading = isLoading();
+        const button = findLoadMoreButton(true);
+        if (loading) {
+          if (busySince === null) busySince = now;
+          idleSince = now;
+        } else {
+          busySince = null;
+        }
+        // The button may disappear during a request, so its absence alone does not prove completion.
+        if (pendingSince !== null && !button && !loading && now - pendingSince >= loadingTimeout) {
+          pendingSince = null;
+        }
+        if (now >= deadline ||
+            (pendingSince !== null && now - pendingSince >= loadingTimeout) ||
+            (busySince !== null && now - busySince >= loadingTimeout)) {
+          throw new Error("追加読み込みの完了を確認できませんでした。通信状態とページを確認して再実行してください。");
+        }
+        if (!loading && pendingSince === null && await clickLoadMoreIfAvailable()) {
+          pendingSince = Date.now();
+          idleSince = pendingSince;
           continue;
         }
-        if (currentHeight === lastHeight && atBottom) {
-          stableCount += 1;
-          if (stableCount >= 3) break;
-        } else {
-          stableCount = 0;
-        }
-        lastHeight = currentHeight;
+        const currentHeight = pageHeight();
+        const atBottom = window.scrollY + window.innerHeight >= currentHeight - 4;
+        if (!loading && pendingSince === null && !button && atBottom && now - idleSince >= idleWait) break;
       }
       window.scrollTo(0, pageHeight());
       await wait(250);
@@ -194,6 +226,7 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     alert("HTMLを保存しました。保存したファイルをニコニ貢献ランクチェッカーに入力してください。");
   })().catch((error) => {
+    document.getElementById("koken-bookmarklet-notice")?.remove();
     alert("HTML保存に失敗しました: " + (error && error.message ? error.message : String(error)));
   });`;
   }
