@@ -9,6 +9,8 @@ async function runPage({ reward = true, autoScroll = true, appearAt = 0, delay =
   let count = 1;
   let clicks = 0;
   let downloads = 0;
+  let lastClickAt = null;
+  let savedAfterClick = null;
   let downloadedCount = null;
   let tabClicks = 0;
   let duplicateClicks = 0;
@@ -29,6 +31,7 @@ async function runPage({ reward = true, autoScroll = true, appearAt = 0, delay =
   button.click = () => {
     if (inFlight) duplicateClicks += 1;
     clicks += 1;
+    lastClickAt = now;
     inFlight = true;
     button.disabled = disabledDuringLoad;
     if (!stuck) schedule(delay, () => {
@@ -51,7 +54,7 @@ async function runPage({ reward = true, autoScroll = true, appearAt = 0, delay =
     },
     createElement: (tag) => {
       const node = element();
-      if (tag === "a") node.click = () => { downloads += 1; };
+      if (tag === "a") node.click = () => { downloads += 1; savedAfterClick = now - lastClickAt; };
       return node;
     },
     getElementById: () => null,
@@ -84,7 +87,7 @@ async function runPage({ reward = true, autoScroll = true, appearAt = 0, delay =
     Blob, URL: class extends URL { static createObjectURL() { return "blob:test"; } static revokeObjectURL() {} },
     alert: (message) => alerts.push(message),
   });
-  return { clicks, downloads, downloadedCount, tabClicks, duplicateClicks, alerts, now };
+  return { clicks, downloads, downloadedCount, tabClicks, duplicateClicks, alerts, now, savedAfterClick };
 }
 
 (async () => {
@@ -103,9 +106,11 @@ async function runPage({ reward = true, autoScroll = true, appearAt = 0, delay =
     assert.strictEqual(result.downloadedCount, 3, "wait for a request even if its button disappears or is disabled");
     assert.strictEqual(result.duplicateClicks, 0);
   }
-  const finalEmpty = await runPage({ finalEmpty: true });
+  const finalEmpty = await runPage({ finalEmpty: true, delay: 500 });
   assert.strictEqual(finalEmpty.downloadedCount, 2, "a final empty batch may remove the control without adding items");
   assert.strictEqual(finalEmpty.downloads, 1);
+  assert.ok(finalEmpty.savedAfterClick >= 15000 && finalEmpty.savedAfterClick < 16000,
+    "save the final empty batch after 15 seconds rather than 60 seconds");
   for (const options of [{ stuck: true }, { busy: true }]) {
     const result = await runPage(options);
     assert.strictEqual(result.downloads, 0, "a stalled load must not be saved as complete");

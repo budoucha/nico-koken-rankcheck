@@ -141,6 +141,7 @@
       await ensureRewardContentsTab();
       showNotice("一番下まで読み込み中...");
       const idleWait = 10000;
+      const finalBatchWait = 15000;
       const loadingTimeout = 60000;
       const deadline = Date.now() + 10 * 60 * 1000;
       let lastProgress = contentProgress();
@@ -178,7 +179,7 @@
           busySince = null;
         }
         // The button may disappear during a request, so its absence alone does not prove completion.
-        if (pendingSince !== null && !button && !loading && now - pendingSince >= loadingTimeout) {
+        if (pendingSince !== null && !button && !loading && now - pendingSince >= finalBatchWait) {
           pendingSince = null;
         }
         if (now >= deadline ||
