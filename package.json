@@ -7,6 +7,7 @@
     "check:lite": "node scripts/check-lite-static.js",
     "test:core": "node test/compatibility/core.test.js",
     "test:bookmarklet": "node test/compatibility/bookmarklet.test.js",
-    "test": "npm run test:core && npm run test:bookmarklet && npm run check:compat && npm run check:lite"
+    "test:history": "node test/compatibility/history.test.js",
+    "test": "npm run test:core && npm run test:bookmarklet && npm run test:history && npm run check:compat && npm run check:lite"
   }
 }

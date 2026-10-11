@@ -708,4 +708,7 @@
   state.history = readHistory();
   renderHistory();
   updateBookmarkletAction();
+  if (state.history.length) {
+    loadHistoryEntry(state.history[0]);
+  }
 })();
