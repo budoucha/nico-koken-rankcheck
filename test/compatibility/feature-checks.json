@@ -71,8 +71,8 @@
   },
   "F015": {
     "level": "platform",
-    "checks": ["lite-localstorage-result-history", "raw-html-not-persisted", "latest-history-open-on-startup", "startup-without-history-or-storage", "current-history-deletion-isolation", "legacy-history-without-deletions"],
-    "notes": "Lite persists parsed results only and opens the newest saved entry on startup. history.test.js covers startup and storage failures, active history identity, and old entries without deletion metadata."
+    "checks": ["lite-localstorage-result-history", "raw-html-not-persisted", "latest-history-open-on-startup", "startup-without-history-or-storage", "history-deletion-preserves-exclusions", "legacy-history-exclusion-migration"],
+    "notes": "Parsed history snapshots remain unchanged by exclusion edits. Common exclusion keys survive history removal and apply to old and new analyses. history.test.js covers startup, migration and storage failures."
   },
   "F016": {
     "level": "platform",
@@ -96,7 +96,7 @@
   },
   "F018": {
     "level": "platform",
-    "checks": ["lite-delete-restore-controls", "lite-deleted-filter-semantics", "current-history-deletion-isolation", "legacy-history-without-deletions", "delete-restore-reopen", "deleted-source-data-retained", "deletion-storage-failure-rollback"],
-    "notes": "history.test.js exercises exclusion/restoration through UI events, history isolation, old entries, retained source data and exports, and persistence failures. check-lite-static.js checks 一覧から除外 / 除外済み / 一覧に戻す labels. The existing deletedKeys field remains compatible. Node omission is documented in CAPABILITY_EXCEPTIONS.md."
+    "checks": ["lite-delete-restore-controls", "lite-deleted-filter-semantics", "common-exclusion-keys-only", "latest-history-only-migration", "empty-common-list-authoritative", "corrupt-exclusion-list-no-fallback", "history-deletion-preserves-exclusions", "keys-without-result-data", "cross-tab-exclusion-refresh", "deleted-source-data-retained", "deletion-storage-failure-rollback"],
+    "notes": "history.test.js exercises common exclusions, latest-entry-only migration, authoritative empty lists, malformed/unreadable storage, history independence, key-only management and cross-tab refresh. Existing per-history deletedKeys is consulted only when creating an absent common list. Node omission is documented in CAPABILITY_EXCEPTIONS.md."
   }
 }

@@ -40,6 +40,35 @@ body {
   margin: 0 auto;
 }
 
+.exclusions-panel {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.exclusions-panel summary {
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.exclusion-list {
+  display: grid;
+  gap: 8px;
+  max-height: 300px;
+  overflow: auto;
+  margin-top: 8px;
+}
+
+.exclusion-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
 .header-inner {
   display: flex;
   justify-content: space-between;

@@ -66,6 +66,13 @@
           <button id="analyze" class="button primary" type="button">分析する</button>
           <p id="status" class="status" role="status" aria-live="polite"></p>
         </div>
+        <details class="exclusions-panel">
+          <summary>共通除外リスト（<span id="exclusion-count">0件</span>）</summary>
+          <p class="input-detail">すべての履歴と次回の分析に適用します。履歴を削除しても保持されます。保存するのはコンテンツのキーだけです。</p>
+          <button id="reload-exclusions" class="button" type="button">再読み込み</button>
+          <p id="exclusion-status" class="status" role="status" aria-live="polite"></p>
+          <div id="exclusion-list" class="exclusion-list"></div>
+        </details>
       </div>
     </section>
 

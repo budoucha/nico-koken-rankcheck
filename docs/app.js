@@ -2,6 +2,7 @@
   const core = window.KokenCore;
   const bookmarklet = window.KokenBookmarklet;
   const HISTORY_KEY = "koken-lite-result-history-v1";
+  const EXCLUSIONS_KEY = "koken-lite-excluded-keys-v1";
   const HISTORY_LIMIT = 10;
   const MAX_DATA_THUMBNAIL_LENGTH = 20000;
   const state = {
@@ -15,8 +16,8 @@
     typeFilter: "all",
     selectionMode: false,
     selectedKeys: new Set(),
-    currentHistoryId: null,
-    deletedKeys: new Set(),
+    excludedKeys: new Set(),
+    exclusionError: "",
     history: [],
   };
 
@@ -47,6 +48,10 @@
     downloadRanks: document.querySelector("#download-ranks"),
     historyList: document.querySelector("#history-list"),
     clearHistory: document.querySelector("#clear-history"),
+    exclusionList: document.querySelector("#exclusion-list"),
+    exclusionCount: document.querySelector("#exclusion-count"),
+    exclusionStatus: document.querySelector("#exclusion-status"),
+    reloadExclusions: document.querySelector("#reload-exclusions"),
     bookmarkletMode: document.querySelector("#bookmarklet-mode"),
     bookmarkletAction: document.querySelector("#bookmarklet-action"),
   };
@@ -157,7 +162,6 @@
       const history = [entry, ...state.history.filter((item) => item.id !== entry.id)].slice(0, HISTORY_LIMIT);
       writeHistory(history);
       state.history = history;
-      state.currentHistoryId = entry.id;
       renderHistory();
       return true;
     } catch {
@@ -167,13 +171,71 @@
     }
   }
 
-  function deletedKeysForEntry(entry) {
-    const itemKeys = new Set(entry.items.map((item) => item.key));
-    return new Set((Array.isArray(entry.deletedKeys) ? entry.deletedKeys : [])
-      .filter((key) => typeof key === "string" && itemKeys.has(key)));
+  function isContentKey(key) {
+    if (typeof key !== "string") return false;
+    const match = /^([a-z]+):[0-9]+$/.exec(key);
+    return Boolean(match && Object.hasOwn(core.CONTENT_TYPES, match[1]));
+  }
+
+  function writeExcludedKeys(keys) {
+    localStorage.setItem(EXCLUSIONS_KEY, JSON.stringify([...keys].sort()));
+  }
+
+  function readExcludedKeys() {
+    const raw = localStorage.getItem(EXCLUSIONS_KEY);
+    if (raw === null) {
+      const latest = readHistory()[0];
+      const keys = new Set((Array.isArray(latest?.deletedKeys) ? latest.deletedKeys : []).filter(isContentKey));
+      writeExcludedKeys(keys);
+      return keys;
+    }
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.every(isContentKey)) throw new Error("Invalid exclusion list");
+    return new Set(parsed);
+  }
+
+  function refreshExclusions() {
+    try {
+      state.excludedKeys = readExcludedKeys();
+      state.exclusionError = "";
+    } catch {
+      state.exclusionError = "共通除外リストを読み込めません。保存領域または保存データを確認してください。";
+    }
+    renderExclusions();
+  }
+
+  function setExclusionStatus(message, isError = false) {
+    elements.exclusionStatus.textContent = message;
+    elements.exclusionStatus.classList.toggle("error", isError);
+  }
+
+  function renderExclusions() {
+    elements.exclusionCount.textContent = state.exclusionError ? "未確認" : `${state.excludedKeys.size}件`;
+    elements.exclusionList.replaceChildren();
+    for (const key of [...state.excludedKeys].sort()) {
+      const row = document.createElement("div");
+      row.className = "exclusion-item";
+      const label = document.createElement("span");
+      label.textContent = key;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "button";
+      remove.dataset.exclusionRemove = key;
+      remove.textContent = "除外を解除";
+      remove.setAttribute("aria-label", `${key}の除外を解除`);
+      row.append(label, remove);
+      elements.exclusionList.appendChild(row);
+    }
+    if (!state.excludedKeys.size && !state.exclusionError) {
+      const empty = document.createElement("p");
+      empty.textContent = "除外しているコンテンツはありません。";
+      elements.exclusionList.appendChild(empty);
+    }
+    setExclusionStatus(state.exclusionError, Boolean(state.exclusionError));
   }
 
   function loadHistoryEntry(entry) {
+    refreshExclusions();
     Object.assign(state, {
       contentsRows: entry.contentsRows.map((row) => ({ ...row })),
       items: entry.items.map((item) => ({ ...item })),
@@ -185,10 +247,8 @@
       typeFilter: "all",
       selectionMode: false,
       selectedKeys: new Set(),
-      currentHistoryId: entry.id,
-      deletedKeys: deletedKeysForEntry(entry),
     });
-    setResultStatus("");
+    setResultStatus(state.exclusionError, Boolean(state.exclusionError));
     resetControls();
     renderAll();
     setStatus("履歴を開きました。");
@@ -201,32 +261,36 @@
     const selected = new Set(selectedVisibleItems().map((item) => item.key));
     if (!selected.size) return;
 
-    const history = readHistory();
-    const entry = history.find((item) => item.id === state.currentHistoryId);
-    if (!entry) {
-      setResultStatus("対象の履歴が保存されていません。HTMLを再分析してから操作してください。", true);
-      return;
-    }
-    const deletedKeys = deletedKeysForEntry(entry);
-    for (const key of selected) {
-      if (deleted) deletedKeys.add(key);
-      else deletedKeys.delete(key);
-    }
-    const updated = { ...entry, deletedKeys: [...deletedKeys] };
-    const nextHistory = history.map((item) => item.id === entry.id ? updated : item);
+    changeExclusions(selected, deleted);
+  }
+
+  function changeExclusions(keys, excluded) {
+    let excludedKeys;
     try {
-      writeHistory(nextHistory);
+      excludedKeys = readExcludedKeys();
+      for (const key of keys) {
+        if (excluded) excludedKeys.add(key);
+        else excludedKeys.delete(key);
+      }
+      writeExcludedKeys(excludedKeys);
     } catch {
-      setResultStatus("履歴に保存できなかったため、一覧の変更は反映していません。", true);
+      const message = "共通除外リストを読み込み・保存できなかったため、一覧の変更は反映していません。";
+      setResultStatus(message, true);
+      setExclusionStatus(message, true);
       return;
     }
-    state.history = nextHistory;
-    state.deletedKeys = deletedKeys;
+    state.excludedKeys = excludedKeys;
+    state.exclusionError = "";
     state.selectedKeys.clear();
+    renderExclusions();
     renderHistory();
-    renderSummary();
-    renderGrid();
-    setResultStatus(`${selected.size}件を${deleted ? "一覧から除外しました" : "一覧に戻しました"}。履歴に保存しました。${deleted ? "「除外済み」から一覧に戻せます。" : ""}`);
+    if (state.items.length) {
+      renderSummary();
+      renderGrid();
+    }
+    const message = `${keys.size}件を${excluded ? "一覧から除外しました" : "除外から解除しました"}。すべての履歴と次回の分析にも適用されます。`;
+    setResultStatus(message);
+    setExclusionStatus(message);
   }
 
   function formatHistoryDate(value) {
@@ -277,8 +341,7 @@
     meta.className = "history-meta";
     const summary = entry.summary || {};
     meta.textContent = `全件 ${summary.total || 0} / 4位以下 ${summary.missing || 0}`;
-    const deletedKeys = deletedKeysForEntry(entry);
-    const deletedCount = entry.items.filter((item) => deletedKeys.has(item.key)).length;
+    const deletedCount = entry.items.filter((item) => state.excludedKeys.has(item.key)).length;
     if (deletedCount) meta.textContent += ` / 除外済み ${deletedCount}`;
     main.append(title, meta);
 
@@ -390,7 +453,7 @@
   }
 
   function renderSummary() {
-    const activeItems = state.items.filter((item) => !state.deletedKeys.has(item.key));
+    const activeItems = state.items.filter((item) => !state.excludedKeys.has(item.key));
     const total = activeItems.length;
     const inTop3 = activeItems.filter((item) => item.inTop3).length;
     const notInTop3 = total - inTop3;
@@ -556,7 +619,7 @@
 
   function visibleItems() {
     const showDeleted = state.rankFilter === "deleted";
-    const items = state.items.filter((item) => state.deletedKeys.has(item.key) === showDeleted);
+    const items = state.items.filter((item) => state.excludedKeys.has(item.key) === showDeleted);
     return core.applyResultOperations(items, {
       rankFilter: showDeleted ? "all" : state.rankFilter,
       typeFilter: state.typeFilter,
@@ -629,15 +692,14 @@
       const contents = await Promise.all(contentsFileList.map(readTextFile));
       const rewardFile = await readTextFile(reward);
       const result = analyzeInputs(contents, rewardFile);
+      refreshExclusions();
       Object.assign(state, result, {
         rankFilter: "missing",
         typeFilter: "all",
         selectionMode: false,
         selectedKeys: new Set(),
-        currentHistoryId: null,
-        deletedKeys: new Set(),
       });
-      setResultStatus("");
+      setResultStatus(state.exclusionError, Boolean(state.exclusionError));
       resetControls();
       renderAll();
       setStatus(saveCurrentResultToHistory() ? "分析が完了しました。履歴に保存しました。" : "分析が完了しました。履歴には保存できませんでした。");
@@ -726,7 +788,6 @@
       const history = state.history.filter((item) => item.id !== removeButton.dataset.historyRemove);
       writeHistory(history);
       state.history = history;
-      if (state.currentHistoryId === removeButton.dataset.historyRemove) state.currentHistoryId = null;
     } catch {
       setStatus("履歴を更新できませんでした。", true);
     }
@@ -739,7 +800,6 @@
     try {
       localStorage.removeItem(HISTORY_KEY);
       state.history = [];
-      state.currentHistoryId = null;
     } catch {
       setStatus("履歴を削除できませんでした。", true);
     }
@@ -754,6 +814,26 @@
     } catch {
       setCopyStatus("コピーできませんでした");
     }
+  });
+
+  function reloadExclusions() {
+    refreshExclusions();
+    renderHistory();
+    if (state.items.length) {
+      renderSummary();
+      renderGrid();
+    }
+    setResultStatus(state.exclusionError, Boolean(state.exclusionError));
+  }
+
+  elements.reloadExclusions.addEventListener("click", reloadExclusions);
+  elements.exclusionList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-exclusion-remove]");
+    if (button) changeExclusions(new Set([button.dataset.exclusionRemove]), false);
+  });
+  window.addEventListener("storage", (event) => {
+    if ((event.storageArea === localStorage || event.storageArea == null) &&
+        (event.key === EXCLUSIONS_KEY || event.key === null)) reloadExclusions();
   });
 
   elements.copySelected.addEventListener("click", async () => {
@@ -779,9 +859,12 @@
   });
 
   state.history = readHistory();
+  refreshExclusions();
   renderHistory();
   updateBookmarkletAction();
   if (state.history.length) {
     loadHistoryEntry(state.history[0]);
+  } else if (state.exclusionError) {
+    setStatus(state.exclusionError, true);
   }
 })();

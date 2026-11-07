@@ -66,20 +66,30 @@ class Element {
   remove() {}
 }
 
-function start(raw, storageUnavailable = false, allowWrites = false) {
+function start(raw, storageUnavailable = false, allowWrites = false, exclusionsRaw = "[]", options = {}) {
   const elements = new Map();
   const filters = [...index.matchAll(/data-filter="([^"]+)"/g)].map((match) => {
     const button = new Element();
     button.dataset.filter = match[1];
     return button;
   });
-  const storage = { raw, unavailable: storageUnavailable, failWrites: false, writes: 0 };
+  const historyKey = "koken-lite-result-history-v1";
+  const exclusionsKey = "koken-lite-excluded-keys-v1";
+  const storage = {
+    raw, exclusionsRaw, unavailable: storageUnavailable, failWrites: false, writes: 0,
+    failHistoryWrites: false, failExclusionWrites: false, failExclusionReads: false, ...options,
+  };
   const downloads = [];
   const copied = [];
   const document = {
     body: new Element(),
     querySelector(selector) {
-      if (!elements.has(selector)) elements.set(selector, new Element());
+      if (!elements.has(selector)) {
+        const element = new Element();
+        const input = index.match(new RegExp(`<input[^>]*id="${selector.slice(1)}"[^>]*>`));
+        element.checked = Boolean(input && /\bchecked\b/.test(input[0]));
+        elements.set(selector, element);
+      }
       return elements.get(selector);
     },
     querySelectorAll: (selector) => selector === "[data-filter]" ? filters : [],
@@ -87,8 +97,11 @@ function start(raw, storageUnavailable = false, allowWrites = false) {
     createDocumentFragment: () => new Element(),
   };
   document.querySelector("#results").classes.add("hidden");
+  const window = Object.assign(new Element(), {
+    KokenCore: core, KokenBookmarklet: bookmarklet, isSecureContext: true, confirm: () => true,
+  });
   vm.runInNewContext(source, {
-    window: { KokenCore: core, KokenBookmarklet: bookmarklet, isSecureContext: true, confirm: () => true },
+    window,
     document,
     navigator: { clipboard: { writeText: async (text) => copied.push(text) } },
     Blob,
@@ -100,27 +113,31 @@ function start(raw, storageUnavailable = false, allowWrites = false) {
     clearTimeout() {},
     localStorage: {
       getItem(key) {
-        assert.equal(key, "koken-lite-result-history-v1");
+        assert.ok(key === historyKey || key === exclusionsKey);
         if (storage.unavailable) throw new Error("Storage unavailable");
-        return storage.raw;
+        if (key === exclusionsKey && storage.failExclusionReads) throw new Error("Exclusions unavailable");
+        return key === historyKey ? storage.raw : storage.exclusionsRaw;
       },
       setItem(key, value) {
-        assert.ok(allowWrites, "Opening history must not write storage");
-        assert.equal(key, "koken-lite-result-history-v1");
+        assert.ok(allowWrites, "Opening existing history and exclusions must not write storage");
+        assert.ok(key === historyKey || key === exclusionsKey);
         if (storage.unavailable || storage.failWrites) throw new Error("Storage unavailable or full");
-        storage.raw = value;
+        if (key === historyKey && storage.failHistoryWrites) throw new Error("History full");
+        if (key === exclusionsKey && storage.failExclusionWrites) throw new Error("Exclusions full");
+        if (key === historyKey) storage.raw = value;
+        else storage.exclusionsRaw = value;
         storage.writes++;
       },
       removeItem(key) {
         assert.ok(allowWrites, "Opening history must not delete storage");
-        assert.equal(key, "koken-lite-result-history-v1");
+        assert.equal(key, historyKey);
         if (storage.unavailable || storage.failWrites) throw new Error("Storage unavailable");
         storage.raw = null;
       },
     },
   });
   const get = (selector) => document.querySelector(selector);
-  return Object.assign(get, { storage, filters, downloads, copied });
+  return Object.assign(get, { storage, filters, downloads, copied, window });
 }
 
 function entry(id, savedAt) {
@@ -214,6 +231,7 @@ async function historyAction(get, id, action) {
   await get("#history-list").fire("click", { target: button });
 }
 function saved(get, id) { return JSON.parse(get.storage.raw).find((item) => item.id === id); }
+function excluded(get) { return JSON.parse(get.storage.exclusionsRaw); }
 
 async function testDeletionAndRestoration() {
   const original = fixture("current");
@@ -228,7 +246,8 @@ async function testDeletionAndRestoration() {
   await typeFilter(get, "video");
   await search(get, "A video");
   await click(get, "#selection-delete");
-  assert.deepEqual(saved(get, "current").deletedKeys, ["video:123"]);
+  assert.deepEqual(excluded(get), ["video:123"]);
+  assert.deepEqual(saved(get, "current"), original);
   assert.deepEqual(saved(get, "other"), other);
   assert.equal(JSON.parse(get.storage.raw).length, 2);
   assert.equal(saved(get, "current").savedAt, original.savedAt);
@@ -259,7 +278,7 @@ async function testDeletionAndRestoration() {
   await check(get, "video:123", true);
   assert.equal(get("#selection-restore").disabled, false);
 
-  const reopened = start(get.storage.raw);
+  const reopened = start(get.storage.raw, false, false, get.storage.exclusionsRaw);
   await filter(reopened, "all");
   assert.equal(keys(reopened).length, 3);
   await filter(reopened, "deleted");
@@ -272,12 +291,12 @@ async function testDeletionAndRestoration() {
   assert.equal(await get.downloads[2].text(), core.top3RanksText(new Map(original.top3Ranks)));
 
   await click(get, "#selection-restore");
-  assert.deepEqual(saved(get, "current").deletedKeys, []);
+  assert.deepEqual(excluded(get), []);
   await filter(get, "missing");
   assert.deepEqual(keys(get), ["video:123", "seiga:789"]);
-  assert.match(get("#result-status").textContent, /一覧に戻しました。履歴に保存/);
+  assert.match(get("#result-status").textContent, /除外から解除しました。すべての履歴/);
   assert.deepEqual(saved(get, "current").items, original.items);
-  const restored = start(get.storage.raw);
+  const restored = start(get.storage.raw, false, false, get.storage.exclusionsRaw);
   assert.deepEqual(keys(restored), ["video:123", "seiga:789"]);
 
   // Delete ranked items too, restore a subset from the deleted view, and retain original ranks/order.
@@ -292,29 +311,32 @@ async function testDeletionAndRestoration() {
   await click(get, "#selection-select-all");
   await typeFilter(get, "video");
   await click(get, "#selection-restore");
-  assert.deepEqual(saved(get, "current").deletedKeys, ["seiga:123"]);
+  assert.deepEqual(excluded(get), ["seiga:123"]);
   await typeFilter(get, "all");
   await filter(get, "rank3");
   assert.deepEqual(keys(get), ["video:456"]);
 
-  // Opening a different history updates that entry without moving it to the front or changing current.
-  const before = saved(get, "current");
+  // Every history uses the common list, and exclusion operations never rewrite history snapshots.
+  const before = get.storage.raw;
   await historyAction(get, "other", "open");
   assert.equal(get("#selection-toggle").attributes["aria-pressed"], "false");
   await click(get, "#selection-toggle");
   await click(get, "#selection-delete");
-  assert.deepEqual(saved(get, "other").deletedKeys, ["video:123", "seiga:789"]);
-  assert.deepEqual(saved(get, "current"), before);
+  assert.deepEqual(excluded(get), ["seiga:123", "seiga:789", "video:123"]);
+  assert.equal(get.storage.raw, before);
   assert.deepEqual(JSON.parse(get.storage.raw).map((item) => item.id), ["current", "other"]);
+  await historyAction(get, "current", "open");
+  await filter(get, "all");
+  assert.deepEqual(keys(get), ["video:456"]);
 }
 
 async function testStorageFailures() {
   const get = start(JSON.stringify([fixture("current")]), false, true);
   await click(get, "#selection-toggle");
-  const before = get.storage.raw;
+  const before = get.storage.exclusionsRaw;
   get.storage.failWrites = true;
   await click(get, "#selection-delete");
-  assert.equal(get.storage.raw, before);
+  assert.equal(get.storage.exclusionsRaw, before);
   assert.deepEqual(keys(get), ["video:123", "seiga:789"]);
   assert.equal(get("#selection-delete").disabled, false);
   assert.match(get("#result-status").textContent, /反映していません/);
@@ -324,40 +346,45 @@ async function testStorageFailures() {
   await filter(get, "deleted");
   await click(get, "#selection-select-all");
   get.storage.failWrites = true;
-  const deleted = get.storage.raw;
+  const deleted = get.storage.exclusionsRaw;
   await click(get, "#selection-restore");
-  assert.equal(get.storage.raw, deleted);
+  assert.equal(get.storage.exclusionsRaw, deleted);
   assert.deepEqual(keys(get), ["video:123", "seiga:789"]);
   get.storage.failWrites = false;
   get.storage.unavailable = true;
   await click(get, "#selection-restore");
-  assert.equal(get.storage.raw, deleted);
+  assert.equal(get.storage.exclusionsRaw, deleted);
   assert.deepEqual(keys(get), ["video:123", "seiga:789"]);
   get.storage.unavailable = false;
   await click(get, "#selection-restore");
   assert.equal(get("#result-status").classes.has("error"), false);
 
-  // Another tab removing history must not cause it to be recreated by a deletion.
+  // Exclusion edits remain available after another tab removes all history.
   get.storage.raw = "[]";
   await filter(get, "missing");
   await click(get, "#selection-select-all");
   await click(get, "#selection-delete");
   assert.equal(get.storage.raw, "[]");
-  assert.equal(keys(get).length, 2);
-  assert.match(get("#result-status").textContent, /対象の履歴が保存されていません/);
+  assert.equal(keys(get).length, 0);
+  assert.deepEqual(excluded(get), ["seiga:789", "video:123"]);
 }
 
 async function testRemovedHistory() {
   for (const removeAll of [false, true]) {
     const get = start(JSON.stringify([fixture("current"), fixture("other")]), false, true);
     await click(get, "#selection-toggle");
+    await click(get, "#selection-delete");
+    const exclusions = get.storage.exclusionsRaw;
     if (removeAll) await click(get, "#clear-history");
     else await historyAction(get, "current", "remove");
     const before = get.storage.raw;
-    await click(get, "#selection-delete");
+    assert.equal(get.storage.exclusionsRaw, exclusions);
+    await filter(get, "deleted");
+    await click(get, "#selection-select-all");
+    await click(get, "#selection-restore");
     assert.equal(get.storage.raw, before);
-    assert.equal(keys(get).length, 2);
-    assert.match(get("#result-status").textContent, /対象の履歴が保存されていません/);
+    assert.equal(keys(get).length, 0);
+    assert.deepEqual(excluded(get), []);
   }
   // A failed history removal leaves the entry available for later item edits.
   for (const removeAll of [false, true]) {
@@ -368,7 +395,8 @@ async function testRemovedHistory() {
     get.storage.failWrites = false;
     await click(get, "#selection-toggle");
     await click(get, "#selection-delete");
-    assert.deepEqual(saved(get, "current").deletedKeys, ["video:123", "seiga:789"]);
+    assert.deepEqual(excluded(get), ["seiga:789", "video:123"]);
+    assert.deepEqual(saved(get, "current"), fixture("current"));
   }
 }
 
@@ -376,14 +404,19 @@ async function testFreshHistoryOnEdit() {
   const get = start(JSON.stringify([fixture("current"), fixture("other")]), false, true);
   await click(get, "#selection-toggle");
   await search(get, "A video");
-  // Simulate changes made by another tab after this view was opened.
-  const current = { ...fixture("current"), deletedKeys: ["seiga:123"] };
-  const added = fixture("added");
-  get.storage.raw = JSON.stringify([added, current]);
+  // Merge with the latest persisted list, retaining keys absent from the open result.
+  get.storage.exclusionsRaw = JSON.stringify(["seiga:123", "video:999"]);
   await click(get, "#selection-delete");
-  assert.deepEqual(saved(get, "current").deletedKeys, ["seiga:123", "video:123"]);
-  assert.deepEqual(saved(get, "added"), added);
-  assert.equal(saved(get, "other"), undefined);
+  assert.deepEqual(excluded(get), ["seiga:123", "video:123", "video:999"]);
+  assert.deepEqual(saved(get, "current"), fixture("current"));
+  get.storage.exclusionsRaw = JSON.stringify(["video:456"]);
+  await get.window.fire("storage", { key: "koken-lite-excluded-keys-v1" });
+  await search(get, "");
+  await filter(get, "deleted");
+  assert.deepEqual(keys(get), ["video:456"]);
+  get.storage.exclusionsRaw = "[]";
+  await click(get, "#reload-exclusions");
+  assert.deepEqual(keys(get), []);
 }
 
 async function testNewAnalysis() {
@@ -391,30 +424,101 @@ async function testNewAnalysis() {
   const reward = '<!doctype html><html><li class="item"><span data-type="video"></span><img src="https://nicovideo.cdn.nimg.jp/thumbnails/888/888.12345.M"><svg><path d="background"></path><path d="M14.616 19.176V9H11"></path></svg></li></html>';
   for (const failSave of [false, true]) {
     const original = { ...fixture("old"), deletedKeys: ["video:123"] };
-    const get = start(JSON.stringify([original]), false, true);
+    const get = start(JSON.stringify([original]), false, true, '["video:999"]');
     get("#contents-files").files = [{ name: "new.html", text: async () => contents }];
     get("#reward-file").files = [{ name: "reward.html", text: async () => reward }];
-    get.storage.failWrites = failSave;
+    get.storage.failHistoryWrites = failSave;
     await click(get, "#analyze");
     assert.equal(get("#status").classes.has("error"), false, get("#status").textContent);
-    assert.deepEqual(keys(get), ["video:999"]);
+    assert.deepEqual(keys(get), []);
     assert.equal(get("#selection-toggle").attributes["aria-pressed"], "false");
     const before = get.storage.raw;
-    get.storage.failWrites = false;
+    get.storage.failHistoryWrites = false;
+    await filter(get, "deleted");
     await click(get, "#selection-toggle");
-    await click(get, "#selection-delete");
+    await click(get, "#selection-restore");
+    assert.deepEqual(excluded(get), []);
     assert.deepEqual(saved(get, "old"), original);
     if (failSave) {
       assert.equal(get.storage.raw, before);
-      assert.deepEqual(keys(get), ["video:999"]);
+      assert.deepEqual(keys(get), []);
     } else {
       const entries = JSON.parse(get.storage.raw);
       assert.equal(entries.length, 2);
       assert.notEqual(entries[0].id, "old");
-      assert.deepEqual(entries[0].deletedKeys, ["video:999"]);
+      assert.equal(Object.hasOwn(entries[0], "deletedKeys"), false);
       assert.equal(keys(get).length, 0);
     }
   }
+}
+
+async function testExclusionMigration() {
+  const latest = { ...fixture("latest"), deletedKeys: ["video:123", "video:123", "video:999", "bad", null] };
+  const older = { ...fixture("older"), deletedKeys: ["seiga:123"] };
+  const raw = JSON.stringify([null, latest, older]);
+  const get = start(raw, false, true, null);
+  assert.deepEqual(excluded(get), ["video:123", "video:999"]);
+  assert.equal(get.storage.raw, raw);
+  assert.deepEqual(keys(get), ["seiga:789"]);
+  await historyAction(get, "older", "open");
+  await filter(get, "deleted");
+  assert.deepEqual(keys(get), ["video:123"]);
+
+  // Empty lists are authoritative; opening or restarting from old snapshots cannot re-import keys.
+  const empty = start(raw);
+  await filter(empty, "deleted");
+  assert.deepEqual(keys(empty), []);
+  assert.equal(empty.storage.writes, 0);
+  const noLegacy = start(JSON.stringify([fixture("latest"), older]), false, true, null);
+  assert.deepEqual(excluded(noLegacy), []);
+  for (const rawHistory of [null, "[]", "[null,{}]", "{"]) {
+    const fresh = start(rawHistory, false, true, null);
+    assert.deepEqual(excluded(fresh), []);
+    assert.equal(fresh.storage.raw, rawHistory);
+  }
+
+  // A failed migration remains absent and can be retried without modifying old history.
+  const failed = start(raw, false, true, null, { failExclusionWrites: true });
+  assert.equal(failed.storage.exclusionsRaw, null);
+  assert.equal(failed.storage.raw, raw);
+  assert.match(failed("#exclusion-status").textContent, /読み込めません/);
+  failed.storage.failExclusionWrites = false;
+  await click(failed, "#reload-exclusions");
+  assert.deepEqual(excluded(failed), ["video:123", "video:999"]);
+
+  // Existing malformed or unreadable data must never trigger legacy fallback or overwrite.
+  for (const malformed of ["", "{", "null", "{}", '"video:123"', '["unknown:1"]', '["video:123",4]']) {
+    const broken = start(raw, false, true, malformed);
+    assert.equal(broken.storage.exclusionsRaw, malformed);
+    assert.match(broken("#exclusion-status").textContent, /読み込めません/);
+    assert.equal(broken.storage.writes, 0);
+    await click(broken, "#selection-toggle");
+    await click(broken, "#selection-delete");
+    assert.equal(broken.storage.exclusionsRaw, malformed);
+    assert.deepEqual(keys(broken), ["video:123", "seiga:789"]);
+  }
+  const unreadable = start(raw, false, true, '["seiga:123"]', { failExclusionReads: true });
+  assert.equal(unreadable.storage.writes, 0);
+  assert.equal(unreadable.storage.exclusionsRaw, '["seiga:123"]');
+  assert.match(unreadable("#result-status").textContent, /読み込めません/);
+}
+
+async function testKeysWithoutHistory() {
+  const get = start(null, false, true, '["video:999","seiga:123"]');
+  assert.equal(get("#results").classes.has("hidden"), true);
+  assert.equal(get("#exclusion-count").textContent, "2件");
+  assert.match(textIn(get("#exclusion-list")), /video:999/);
+  const button = get("#exclusion-list").querySelectorAll("[data-exclusion-remove]")
+    .find((item) => item.dataset.exclusionRemove === "video:999");
+  await get("#exclusion-list").fire("click", { target: button });
+  assert.deepEqual(excluded(get), ["seiga:123"]);
+  assert.equal(get.storage.raw, null);
+  assert.equal(get("#results").classes.has("hidden"), true);
+  const result = start(JSON.stringify([fixture("current")]), false, false, '["video:999"]');
+  assert.deepEqual(keys(result), ["video:123", "seiga:789"]);
+  assert.match(textIn(result("#summary")), /通常一覧\s+4.*除外済み\s+0/);
+  await filter(result, "deleted");
+  assert.deepEqual(keys(result), []);
 }
 
 async function run() {
@@ -431,6 +535,8 @@ async function run() {
   await testRemovedHistory();
   await testFreshHistoryOnEdit();
   await testNewAnalysis();
-  console.log("Lite history startup, deletion and restoration tests OK");
+  await testExclusionMigration();
+  await testKeysWithoutHistory();
+  console.log("Lite history and common exclusion tests OK");
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });
