@@ -104,7 +104,6 @@ h2 {
   overflow-wrap: anywhere;
 }
 
-.header-actions,
 .input-actions,
 .history-actions,
 .download-actions {
@@ -223,6 +222,10 @@ dialog::backdrop {
 
 .input-label {
   font-weight: 750;
+}
+
+.input-panel > .button.input-label {
+  justify-self: start;
 }
 
 .input-panel h3 {

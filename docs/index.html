@@ -17,10 +17,6 @@
         <h1>ニコニ貢献ランクチェッカー lite</h1>
         <p id="source-summary" class="source-summary">contents HTMLとreward HTMLを選択してください</p>
       </div>
-      <div class="header-actions">
-        <a class="button" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contentsを開く</a>
-        <a class="button" href="https://koken.nicovideo.jp/supporter/reward" target="_blank" rel="noopener noreferrer">rewardを開く</a>
-      </div>
     </div>
   </header>
 
@@ -35,16 +31,16 @@
         </div>
         <div class="input-grid">
           <div class="input-stack">
-            <label class="input-panel">
-              <span class="input-label">contents HTML</span>
-              <span class="input-detail">静画・動画など、種別ごとに保存したHTMLを複数選択できます。</span>
-              <input id="contents-files" type="file" accept=".html,text/html" multiple>
-            </label>
-            <label class="input-panel">
-              <span class="input-label">reward HTML</span>
-              <span class="input-detail">貢献成績ページを保存したHTMLを1つ選択します。</span>
-              <input id="reward-file" type="file" accept=".html,text/html">
-            </label>
+            <div class="input-panel">
+              <a id="contents-label" class="button input-label" href="https://koken.nicovideo.jp/supporter/contents" target="_blank" rel="noopener noreferrer">contents HTML</a>
+              <span id="contents-detail" class="input-detail">静画・動画など、種別ごとに保存したHTMLを複数選択できます。</span>
+              <input id="contents-files" type="file" accept=".html,text/html" multiple aria-labelledby="contents-label" aria-describedby="contents-detail">
+            </div>
+            <div class="input-panel">
+              <a id="reward-label" class="button input-label" href="https://koken.nicovideo.jp/supporter/reward" target="_blank" rel="noopener noreferrer">reward HTML</a>
+              <span id="reward-detail" class="input-detail">貢献成績ページを保存したHTMLを1つ選択します。</span>
+              <input id="reward-file" type="file" accept=".html,text/html" aria-labelledby="reward-label" aria-describedby="reward-detail">
+            </div>
             <section class="input-panel bookmarklet-panel" aria-labelledby="bookmarklet-heading">
               <h3 id="bookmarklet-heading">HTML保存ブックマークレット</h3>
               <p class="input-detail">保存したいニコニ貢献ページを開いてから、このブックマークレットを実行するとHTMLを保存できます。下のボタンはクリックでURLをコピー、ブックマークバーへドラッグで登録できます。アドレスバーに貼り付けて使う場合は、先頭の javascript: を手入力してから続きのURLを貼り付けてください。</p>
