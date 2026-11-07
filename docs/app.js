@@ -1,6 +1,7 @@
 (() => {
   const core = window.KokenCore;
   const bookmarklet = window.KokenBookmarklet;
+  const resultFile = window.KokenResultFile;
   const HISTORY_KEY = "koken-lite-result-history-v1";
   const EXCLUSIONS_KEY = "koken-lite-excluded-keys-v1";
   const HISTORY_LIMIT = 10;
@@ -25,6 +26,13 @@
     contentsFiles: document.querySelector("#contents-files"),
     rewardFile: document.querySelector("#reward-file"),
     analyze: document.querySelector("#analyze"),
+    resultFile: document.querySelector("#result-file"),
+    importResult: document.querySelector("#import-result"),
+    importDialog: document.querySelector("#import-dialog"),
+    importMessage: document.querySelector("#import-message"),
+    importMerge: document.querySelector("#import-merge"),
+    importResultOnly: document.querySelector("#import-result-only"),
+    importCancel: document.querySelector("#import-cancel"),
     status: document.querySelector("#status"),
     sourceSummary: document.querySelector("#source-summary"),
     results: document.querySelector("#results"),
@@ -59,6 +67,7 @@
   };
 
   let copyStatusTimer = 0;
+  let pendingImport = null;
 
   function setStatus(message, isError = false) {
     elements.status.textContent = message;
@@ -200,12 +209,12 @@
     localStorage.setItem(EXCLUSIONS_KEY, JSON.stringify([...keys].sort()));
   }
 
-  function readExcludedKeys() {
+  function readExcludedKeys(initialize = true) {
     const raw = localStorage.getItem(EXCLUSIONS_KEY);
     if (raw === null) {
       const latest = readHistory()[0];
       const keys = new Set((Array.isArray(latest?.deletedKeys) ? latest.deletedKeys : []).filter(isContentKey));
-      writeExcludedKeys(keys);
+      if (initialize) writeExcludedKeys(keys);
       return keys;
     }
     const parsed = JSON.parse(raw);
@@ -698,7 +707,107 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function setImportBusy(busy) {
+    elements.importResult.disabled = busy;
+    elements.analyze.disabled = busy;
+  }
+
+  function completeImport(mode) {
+    const imported = pendingImport;
+    pendingImport = null;
+    if (elements.importDialog.open) elements.importDialog.close();
+    try {
+      if (!imported || mode === "cancel") {
+        setStatus("インポートをキャンセルしました。");
+        return;
+      }
+      const oldHistoryRaw = localStorage.getItem(HISTORY_KEY);
+      let storedHistory;
+      try { storedHistory = oldHistoryRaw === null ? [] : JSON.parse(oldHistoryRaw); }
+      catch { throw new Error("既存の履歴を読み取れません。保存データを確認してください。"); }
+      if (!Array.isArray(storedHistory)) throw new Error("既存の履歴を読み取れません。");
+      const { missingRows, ...snapshot } = imported.result;
+      const entry = { ...snapshot, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, savedAt: new Date().toISOString() };
+      const history = [entry, ...storedHistory.filter(isValidHistoryEntry)].slice(0, HISTORY_LIMIT);
+      let exclusionsMissing = false;
+      try { exclusionsMissing = localStorage.getItem(EXCLUSIONS_KEY) === null; }
+      catch (error) { if (mode === "merge") throw error; }
+      const keys = mode === "merge" || exclusionsMissing ? readExcludedKeys(false) : null;
+      const oldCount = keys?.size || 0;
+      if (mode === "merge") for (const key of imported.excludedKeys) keys.add(key);
+      const newHistoryRaw = JSON.stringify(history);
+      let historyWritten = false;
+      try {
+        localStorage.setItem(HISTORY_KEY, newHistoryRaw);
+        historyWritten = true;
+        if (keys && (exclusionsMissing || keys.size !== oldCount)) writeExcludedKeys(keys);
+      } catch (error) {
+        if (historyWritten) {
+          try {
+            if (localStorage.getItem(HISTORY_KEY) !== newHistoryRaw) throw new Error("History changed");
+            if (oldHistoryRaw === null) localStorage.removeItem(HISTORY_KEY);
+            else localStorage.setItem(HISTORY_KEY, oldHistoryRaw);
+          } catch {
+            state.history = readHistory();
+            renderHistory();
+            throw new Error("インポートの保存と履歴の復旧に失敗しました。履歴を確認してください。共通除外リストは変更していません。");
+          }
+        }
+        throw new Error("インポートを保存できませんでした。解析結果と共通除外リストは変更していません。");
+      }
+      state.history = history;
+      loadHistoryEntry(entry);
+      renderHistory();
+      setStatus(`解析結果をインポートして履歴に保存しました。${keys && keys.size > oldCount ? `共通除外リストに${keys.size - oldCount}件追加しました。` : ""}`);
+    } catch (error) {
+      setStatus(error.message || "インポートに失敗しました。", true);
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  elements.importResult.addEventListener("click", async () => {
+    if (elements.importResult.disabled) return;
+    const file = elements.resultFile.files[0];
+    if (!file) {
+      setStatus("解析結果JSONを選択してください。", true);
+      return;
+    }
+    setImportBusy(true);
+    try {
+      const imported = resultFile.parse(await file.text());
+      let keys;
+      elements.importMerge.disabled = false;
+      try { keys = imported.excludedKeys?.length ? readExcludedKeys(false) : new Set(); }
+      catch {
+        pendingImport = imported;
+        elements.importMerge.disabled = true;
+        elements.importMessage.textContent = "共通除外リストを確認できません。解析結果だけをインポートするか、キャンセルしてください。";
+        elements.importDialog.showModal();
+        return;
+      }
+      const additions = (imported.excludedKeys || []).filter((key) => !keys.has(key));
+      pendingImport = imported;
+      if (additions.length) {
+        elements.importMessage.textContent = `共通除外リストに${additions.length}件追加しますか？ 現在の${keys.size}件は残ります。`;
+        elements.importDialog.showModal();
+      } else {
+        completeImport("result-only");
+      }
+    } catch (error) {
+      pendingImport = null;
+      setStatus(error.message || "解析結果JSONを読み込めませんでした。", true);
+    } finally {
+      if (!pendingImport) setImportBusy(false);
+    }
+  });
+  elements.importMerge.addEventListener("click", () => completeImport("merge"));
+  elements.importResultOnly.addEventListener("click", () => completeImport("result-only"));
+  elements.importCancel.addEventListener("click", () => completeImport("cancel"));
+  elements.importDialog.addEventListener("cancel", () => completeImport("cancel"));
+
   elements.analyze.addEventListener("click", async () => {
+    if (elements.analyze.disabled) return;
     const contentsFileList = [...elements.contentsFiles.files];
     const reward = elements.rewardFile.files[0];
     if (!contentsFileList.length || !reward) {
@@ -706,6 +815,7 @@
       return;
     }
     elements.analyze.disabled = true;
+    elements.importResult.disabled = true;
     setStatus("分析しています...");
     try {
       const contents = await Promise.all(contentsFileList.map(readTextFile));
@@ -726,6 +836,7 @@
       setStatus(error && error.message ? error.message : String(error), true);
     } finally {
       elements.analyze.disabled = false;
+      elements.importResult.disabled = false;
     }
   });
 

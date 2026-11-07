@@ -38,6 +38,8 @@ const server = read(serverPath);
 const generate = read(generatePath);
 const index = read(indexPath);
 const app = read(appJsPath);
+const resultFileSource = read(path.join(root, "src/core/result-file.js"));
+if (resultFileSource !== read(path.join(docsDir, "result-file.js"))) fail("docs/result-file.js is out of sync");
 
 for (const required of [
   'id="selection-delete"',
@@ -48,6 +50,13 @@ for (const required of [
   'id="exclusion-status"',
   'id="reload-exclusions"',
   'id="download-result"',
+  'id="result-file"',
+  'id="import-result"',
+  'id="import-dialog"',
+  'id="import-merge"',
+  'id="import-result-only"',
+  'id="import-cancel"',
+  './result-file.js',
   'id="export-exclusions" type="checkbox" checked',
   'data-filter="deleted"',
   "選択中を一覧から除外",

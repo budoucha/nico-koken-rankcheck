@@ -8,6 +8,7 @@
     "test:core": "node test/compatibility/core.test.js",
     "test:bookmarklet": "node test/compatibility/bookmarklet.test.js",
     "test:history": "node test/compatibility/history.test.js",
-    "test": "npm run test:core && npm run test:bookmarklet && npm run test:history && npm run check:compat && npm run check:lite"
+    "test:result-file": "node test/compatibility/result-file.test.js",
+    "test": "npm run test:core && npm run test:bookmarklet && npm run test:result-file && npm run test:history && npm run check:compat && npm run check:lite"
   }
 }

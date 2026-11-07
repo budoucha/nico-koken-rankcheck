@@ -15,3 +15,4 @@ Rules:
 | F013 | lite | best-effort | Browser-side thumbnail API calls depend on CORS and network policy. External image display can work even when `fetch()` cannot. | Confirm a stable CORS-compatible endpoint or proxy-free metadata source. |
 | F018 | Node | omitted | Browser-wide exclusion preferences are scoped to Lite. Node regenerates result.html from source HTML; persistent viewer preferences there need a separately defined storage workflow. | Add persistent exclusion preferences to the Node viewer. |
 | F019 | Node | omitted | Portable JSON backup currently targets Lite's browser-local results and preferences. Node already persists source HTML and regenerates its viewer and exports. | Add portable result JSON import/export to Node. |
+| F020 | Node | omitted | JSON result restoration targets Lite history and browser preferences. Node currently regenerates results from saved HTML. | Add a stored-result workflow to Node. |

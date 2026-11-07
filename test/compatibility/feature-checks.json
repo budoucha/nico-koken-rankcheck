@@ -103,5 +103,10 @@
     "level": "platform",
     "checks": ["result-json-schema-v1", "full-analysis-export-with-filters", "optional-full-common-exclusion-export", "empty-versus-omitted-exclusions", "no-raw-html-or-ui-state", "bounded-export-thumbnails", "export-without-history-storage", "export-failure-notification"],
     "notes": "history.test.js exercises JSON downloads with exclusions enabled/disabled, keys absent from the result, malformed storage, full result reconstruction and export failures. The portable format is documented in docs/result-export.md."
+  },
+  "F020": {
+    "level": "platform",
+    "checks": ["export-import-round-trip", "result-file-validation", "safe-import-urls", "legacy-import-defaults", "duplicate-result-keys-preserved", "derived-result-recalculation", "import-exclusion-or-confirmation", "import-result-only-and-cancel", "import-zero-additions-no-dialog", "import-write-failure-rollback", "import-recovery-failure-notification"],
+    "notes": "result-file.test.js tests schema, identity, ranks, URL schemes, legacy fields and derived values. history.test.js exercises real exporter output through import UI events, confirmation choices, OR merging, cancellation, corrupt stores and write/rollback failures."
   }
 }

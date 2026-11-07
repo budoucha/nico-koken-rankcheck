@@ -4,6 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const core = require("../../src/core/koken-core");
 const bookmarklet = require("../../src/core/bookmarklet");
+const resultFile = require("../../src/core/result-file");
 
 const source = fs.readFileSync(path.join(__dirname, "../../docs/app.js"), "utf8");
 const index = fs.readFileSync(path.join(__dirname, "../../docs/index.html"), "utf8");
@@ -64,6 +65,8 @@ class Element {
   }
   click() {}
   remove() {}
+  showModal() { this.open = true; }
+  close() { this.open = false; }
 }
 
 function start(raw, storageUnavailable = false, allowWrites = false, exclusionsRaw = "[]", options = {}) {
@@ -103,7 +106,8 @@ function start(raw, storageUnavailable = false, allowWrites = false, exclusionsR
   };
   document.querySelector("#results").classes.add("hidden");
   const window = Object.assign(new Element(), {
-    KokenCore: core, KokenBookmarklet: bookmarklet, isSecureContext: true, confirm: () => true,
+    KokenCore: core, KokenBookmarklet: bookmarklet, KokenResultFile: resultFile,
+    isSecureContext: true, confirm: () => true,
   });
   vm.runInNewContext(source, {
     window,
@@ -132,8 +136,12 @@ function start(raw, storageUnavailable = false, allowWrites = false, exclusionsR
         assert.ok(key === historyKey || key === exclusionsKey);
         if (storage.unavailable || storage.failWrites) throw new Error("Storage unavailable or full");
         if (key === historyKey && storage.failHistoryWrites) throw new Error("History full");
+        if (key === historyKey && storage.failHistoryRollback && storage.historyWrites) throw new Error("Rollback unavailable");
         if (key === exclusionsKey && storage.failExclusionWrites) throw new Error("Exclusions full");
-        if (key === historyKey) storage.raw = value;
+        if (key === historyKey) {
+          storage.raw = value;
+          storage.historyWrites = (storage.historyWrites || 0) + 1;
+        }
         else storage.exclusionsRaw = value;
         storage.writes++;
       },
@@ -630,6 +638,165 @@ async function testResultExport() {
   assert.match(get("#result-status").textContent, /出力できません/);
 }
 
+async function exportedFixture() {
+  const get = start(JSON.stringify([fixture("incoming")]));
+  await click(get, "#download-result");
+  return JSON.parse(await get.downloads[0].text());
+}
+
+async function importFile(get, file) {
+  get("#result-file").files = [{ name: "result.koken-result.json", text: async () => typeof file === "string" ? file : JSON.stringify(file) }];
+  await click(get, "#import-result");
+}
+
+async function testResultImport() {
+  const incoming = await exportedFixture();
+  incoming.exportedAt = "2020-01-01T00:00:00.000Z";
+  incoming.excludedKeys = ["seiga:123", "video:999", "video:999"];
+  incoming.result.summary = { total: 999 };
+  incoming.result.missingRows = [];
+  const old = fixture("existing");
+  const get = start(JSON.stringify([old]), false, true, '["video:123"]');
+  const beforeHistory = get.storage.raw;
+  const beforeGrid = textIn(get("#grid"));
+  await importFile(get, incoming);
+  assert.equal(get("#import-dialog").open, true);
+  assert.match(get("#import-message").textContent, /2件追加.*現在の1件/);
+  assert.equal(get("#analyze").disabled, true);
+  assert.equal(get.storage.raw, beforeHistory);
+  assert.equal(textIn(get("#grid")), beforeGrid);
+  assert.equal(get.storage.writes, 0);
+  await click(get, "#import-merge");
+  assert.equal(get("#import-dialog").open, false);
+  assert.equal(get("#analyze").disabled, false);
+  assert.equal(get("#import-result").disabled, false);
+  const history = JSON.parse(get.storage.raw);
+  assert.equal(history.length, 2);
+  assert.notEqual(history[0].id, old.id);
+  assert.notEqual(history[0].savedAt, incoming.exportedAt);
+  assert.deepEqual(history[1], old);
+  assert.equal(history[0].items.length, 4);
+  assert.deepEqual(history[0].summary, { total: 4, inTop3: 2, missing: 2 });
+  assert.deepEqual(excluded(get), ["seiga:123", "video:123", "video:999"]);
+  assert.match(get("#source-summary").textContent, /incoming.html/);
+  assert.equal(get("#selection-toggle").attributes["aria-pressed"], "false");
+  assert.equal(get("#search").value, "");
+  assert.equal(get("#sort").value, "index");
+  await click(get, "#download-missing");
+  assert.deepEqual(Buffer.from(await get.downloads[0].arrayBuffer()), Buffer.from(core.csvText(core.MISSING_CSV_HEADER, core.createMissingRows(history[0].items))));
+  const reopened = start(get.storage.raw, false, false, get.storage.exclusionsRaw);
+  assert.match(reopened("#source-summary").textContent, /incoming.html/);
+  await filter(reopened, "all");
+  assert.deepEqual(keys(reopened), ["video:456", "seiga:789"]);
+
+  for (const cancel of ["button", "escape"]) {
+    const target = start(JSON.stringify([old]), false, true);
+    const originalGrid = textIn(target("#grid"));
+    await importFile(target, incoming);
+    if (cancel === "button") await click(target, "#import-cancel");
+    else await target("#import-dialog").fire("cancel");
+    assert.equal(target.storage.raw, JSON.stringify([old]));
+    assert.deepEqual(excluded(target), []);
+    assert.equal(target.storage.writes, 0);
+    assert.equal(textIn(target("#grid")), originalGrid);
+    assert.equal(target("#import-result").disabled, false);
+  }
+  const only = start(JSON.stringify([old]), false, true, '["video:123"]');
+  await importFile(only, incoming);
+  await click(only, "#import-result-only");
+  assert.deepEqual(excluded(only), ["video:123"]);
+  assert.equal(JSON.parse(only.storage.raw).length, 2);
+
+  for (const excludedKeys of [undefined, [], ["video:123", "video:123"]]) {
+    const file = { ...incoming, excludedKeys };
+    const target = start(JSON.stringify([old]), false, true, '["video:123"]');
+    await importFile(target, file);
+    assert.notEqual(target("#import-dialog").open, true);
+    assert.equal(JSON.parse(target.storage.raw).length, 2);
+    assert.deepEqual(excluded(target), ["video:123"]);
+  }
+
+  // Re-read preferences when the user accepts; preserve updates from another tab.
+  const concurrent = start(JSON.stringify([old]), false, true);
+  await importFile(concurrent, incoming);
+  concurrent.storage.exclusionsRaw = '["seiga:789"]';
+  await click(concurrent, "#import-merge");
+  assert.deepEqual(excluded(concurrent), ["seiga:123", "seiga:789", "video:999"]);
+  const legacy = { ...old, deletedKeys: ["video:123"] };
+  const delayedMigration = start(JSON.stringify([legacy]), false, true, null, { failExclusionWrites: true });
+  delayedMigration.storage.failExclusionWrites = false;
+  await importFile(delayedMigration, { ...incoming, excludedKeys: undefined });
+  assert.deepEqual(excluded(delayedMigration), ["video:123"]);
+  assert.equal(JSON.parse(delayedMigration.storage.raw).length, 2);
+  const smaller = {
+    ...incoming, excludedKeys: undefined,
+    result: { ...incoming.result, items: incoming.result.items.slice(0, 2), contentsRows: incoming.result.contentsRows.slice(0, 2) },
+  };
+  const histories = Array.from({ length: 10 }, (_, i) => fixture(`old-${i}`));
+  const separate = start(JSON.stringify(histories), false, true, '["video:999"]');
+  await importFile(separate, smaller);
+  const separateHistory = JSON.parse(separate.storage.raw);
+  assert.equal(separateHistory.length, 10);
+  assert.equal(separateHistory[0].items.length, 2);
+  assert.equal(separateHistory[1].items.length, 4);
+  assert.equal(separateHistory.some((entry) => entry.id === "old-9"), false);
+  assert.deepEqual(excluded(separate), ["video:999"]);
+}
+
+async function testImportFailures() {
+  const incoming = await exportedFixture();
+  incoming.excludedKeys = ["video:999"];
+  for (const raw of [null, JSON.stringify([fixture("existing")])]) {
+    const get = start(raw, false, true);
+    const gridBefore = textIn(get("#grid"));
+    await importFile(get, incoming);
+    get.storage.failExclusionWrites = true;
+    await click(get, "#import-merge");
+    assert.equal(get.storage.raw, raw);
+    assert.deepEqual(excluded(get), []);
+    assert.equal(textIn(get("#grid")), gridBefore);
+    assert.match(get("#status").textContent, /変更していません/);
+  }
+  const full = start(JSON.stringify([fixture("existing")]), false, true);
+  const before = full.storage.raw;
+  full.storage.failHistoryWrites = true;
+  await importFile(full, { ...incoming, excludedKeys: [] });
+  assert.equal(full.storage.raw, before);
+  assert.deepEqual(excluded(full), []);
+  assert.match(full("#status").textContent, /保存できませんでした/);
+  const rollback = start(before, false, true);
+  await importFile(rollback, incoming);
+  rollback.storage.failExclusionWrites = true;
+  rollback.storage.failHistoryRollback = true;
+  await click(rollback, "#import-merge");
+  assert.match(rollback("#status").textContent, /履歴の復旧に失敗/);
+  assert.deepEqual(excluded(rollback), []);
+
+  for (const invalid of ["{", "null", JSON.stringify({ ...incoming, schemaVersion: 99 })]) {
+    const get = start(before, false, true);
+    await importFile(get, invalid);
+    assert.equal(get.storage.raw, before);
+    assert.equal(get.storage.writes, 0);
+    assert.ok(get("#status").classes.has("error"));
+    assert.equal(get("#import-result").disabled, false);
+  }
+  const brokenHistory = start("{", false, true);
+  await importFile(brokenHistory, { ...incoming, excludedKeys: [] });
+  assert.equal(brokenHistory.storage.raw, "{");
+  const brokenExclusions = start(before, false, true, "{");
+  await importFile(brokenExclusions, incoming);
+  assert.equal(brokenExclusions.storage.raw, before);
+  assert.equal(brokenExclusions.storage.exclusionsRaw, "{");
+  assert.equal(brokenExclusions("#import-merge").disabled, true);
+  await click(brokenExclusions, "#import-result-only");
+  assert.equal(JSON.parse(brokenExclusions.storage.raw).length, 2);
+  assert.equal(brokenExclusions.storage.exclusionsRaw, "{");
+  const unreadableExclusions = start(before, false, true, "[]", { failExclusionReads: true });
+  await importFile(unreadableExclusions, incoming);
+  await click(unreadableExclusions, "#import-result-only");
+  assert.equal(JSON.parse(unreadableExclusions.storage.raw).length, 2);
+}
+
 async function run() {
   for (const deletedKeys of [undefined, null, {}, "video:123", [null, 2, "unknown"]]) {
     const legacy = { ...fixture("legacy"), deletedKeys };
@@ -647,6 +814,8 @@ async function run() {
   await testExclusionMigration();
   await testKeysWithoutHistory();
   await testResultExport();
-  console.log("Lite history, common exclusion and result export tests OK");
+  await testResultImport();
+  await testImportFailures();
+  console.log("Lite history, common exclusion and result import/export tests OK");
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

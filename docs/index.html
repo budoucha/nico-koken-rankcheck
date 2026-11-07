@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="./app.css">
   <script src="./koken-core.js" defer></script>
   <script src="./bookmarklet.js" defer></script>
+  <script src="./result-file.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
@@ -55,6 +56,12 @@
                 </select>
               </label>
               <a id="bookmarklet-action" class="button bookmarklet-action" href="#">ニコニ貢献HTML取得（自動）</a>
+            </section>
+            <section class="input-panel" aria-labelledby="import-heading">
+              <h3 id="import-heading">解析結果JSONのインポート</h3>
+              <label for="result-file" class="input-detail">保存した .koken-result.json を新しい履歴として取り込みます。</label>
+              <input id="result-file" type="file" accept=".json,application/json">
+              <button id="import-result" class="button" type="button">解析結果をインポート</button>
             </section>
           </div>
           <section class="history-panel" aria-labelledby="history-heading">
@@ -131,5 +138,14 @@
       <section id="grid" class="grid" aria-label="解析結果"></section>
     </section>
   </main>
+  <dialog id="import-dialog" aria-labelledby="import-dialog-title" aria-describedby="import-message">
+    <h2 id="import-dialog-title">除外リストの取り込み</h2>
+    <p id="import-message"></p>
+    <div class="dialog-actions">
+      <button id="import-merge" class="button primary" type="button">追加してインポート</button>
+      <button id="import-result-only" class="button" type="button">解析結果だけインポート</button>
+      <button id="import-cancel" class="button" type="button" autofocus>キャンセル</button>
+    </div>
+  </dialog>
 </body>
 </html>
