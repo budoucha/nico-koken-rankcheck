@@ -192,9 +192,18 @@ dialog::backdrop {
 
 .input-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   align-items: center;
+  margin-top: 12px;
+}
+
+.input-toggle {
+  cursor: pointer;
+}
+
+.input-toggle h2 {
+  display: inline;
 }
 
 .input-grid {

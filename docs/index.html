@@ -22,9 +22,9 @@
 
   <main>
     <section class="input-band" aria-labelledby="input-heading">
-      <div class="input-inner">
+      <details class="input-inner" open>
+        <summary class="input-toggle"><h2 id="input-heading">入力</h2></summary>
         <div class="input-header">
-          <h2 id="input-heading">入力</h2>
           <div class="history-actions">
             <button id="clear-history" class="button" type="button">履歴削除</button>
           </div>
@@ -75,7 +75,7 @@
           <p id="exclusion-status" class="status" role="status" aria-live="polite"></p>
           <div id="exclusion-list" class="exclusion-list"></div>
         </details>
-      </div>
+      </details>
     </section>
 
     <section id="results" class="results hidden" aria-labelledby="results-heading">

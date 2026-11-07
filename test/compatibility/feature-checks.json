@@ -31,7 +31,7 @@
   },
   "F007": {
     "level": "platform",
-    "checks": ["upload-validation"],
+    "checks": ["upload-validation", "lite-collapsible-input-section-default-open"],
     "notes": "Node upload and lite File API should enforce the same input validation expectations. Lite source-page links are the contents HTML/reward HTML buttons within their input panels; file inputs retain accessible names and descriptions."
   },
   "F008": {

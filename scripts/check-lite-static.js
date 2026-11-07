@@ -38,6 +38,9 @@ const server = read(serverPath);
 const generate = read(generatePath);
 const index = read(indexPath);
 const app = read(appJsPath);
+if (!/<details class="input-inner" open>\s*<summary class="input-toggle"><h2 id="input-heading">入力<\/h2><\/summary>/.test(index)) {
+  fail("docs/index.html must expose an initially open input disclosure");
+}
 for (const [name, source] of [["docs/index.html", index], ["generate.js", generate]]) {
   const checkbox = source.match(/<input\b[^>]*id="copy-include-header"[^>]*>/)?.[0];
   if (!checkbox || /\bchecked\b/.test(checkbox)) fail(`${name} must expose an unchecked copy header option`);
