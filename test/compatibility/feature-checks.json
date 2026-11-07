@@ -72,7 +72,7 @@
   "F015": {
     "level": "platform",
     "checks": ["lite-localstorage-result-history", "raw-html-not-persisted", "latest-history-open-on-startup", "startup-without-history-or-storage", "history-deletion-preserves-exclusions", "legacy-history-exclusion-migration"],
-    "notes": "Parsed history snapshots remain unchanged by exclusion edits. Common exclusion keys survive history removal and apply to old and new analyses. history.test.js covers startup, migration and storage failures."
+    "notes": "History cards show total and missing counts without an excluded count. Parsed history snapshots remain unchanged by exclusion edits. Common exclusion keys survive history removal and apply to old and new analyses. history.test.js covers startup, migration and storage failures."
   },
   "F016": {
     "level": "platform",

@@ -370,8 +370,6 @@
     meta.className = "history-meta";
     const summary = entry.summary || {};
     meta.textContent = `全件 ${summary.total || 0} / 4位以下 ${summary.missing || 0}`;
-    const deletedCount = entry.items.filter((item) => state.excludedKeys.has(item.key)).length;
-    if (deletedCount) meta.textContent += ` / 除外済み ${deletedCount}`;
     main.append(title, meta);
 
     const buttons = document.createElement("div");
