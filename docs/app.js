@@ -691,7 +691,7 @@
     const title = selected.bookmarkTitle || selected.label;
     elements.bookmarkletAction.href = selected.url;
     elements.bookmarkletAction.title = title;
-    elements.bookmarkletAction.textContent = title;
+    elements.bookmarkletAction.textContent = "クリップボードにコピー";
   }
 
   function downloadText(fileName, text, type) {

@@ -103,7 +103,8 @@ for (const required of [
   "ブックマークバーへドラッグ",
   "javascript:",
   "手入力",
-  "HTML取得方法",
+  'aria-label="HTML取得方法"',
+  "クリップボードにコピー",
 ]) {
   if (!index.includes(required)) {
     fail(`docs/index.html is missing ${required}`);

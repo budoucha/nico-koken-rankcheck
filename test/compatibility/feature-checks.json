@@ -78,6 +78,7 @@
     "level": "platform",
     "checks": [
       "shared-bookmarklet-source",
+      "lite-bookmarklet-copy-label-and-accessible-mode-name",
       "node-and-lite-click-copy-drag-register-action",
       "descriptive-drag-bookmark-title",
       "auto-load-bookmarklet-default",
