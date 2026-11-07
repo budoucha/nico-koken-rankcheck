@@ -108,6 +108,20 @@ h2 {
   color: #fff;
 }
 
+.button.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.export-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+#result-status:not(:empty) {
+  margin: 0 0 12px;
+}
+
 .button:disabled {
   cursor: not-allowed;
   opacity: .55;
@@ -306,7 +320,7 @@ input[type="file"] {
 .segmented {
   display: inline-grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(6, minmax(76px, 1fr));
+  grid-template-columns: repeat(7, minmax(76px, 1fr));
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;

@@ -79,6 +79,7 @@
           <button id="download-contents" class="button" type="button">contents CSV</button>
           <button id="download-missing" class="button" type="button">4位以下 CSV</button>
           <button id="download-ranks" class="button" type="button">順位 TXT</button>
+          <p class="export-note input-detail">CSV/TXTには削除済みも含まれます。</p>
         </div>
       </div>
 
@@ -90,6 +91,7 @@
           <button type="button" data-filter="rank3" aria-pressed="false">3位</button>
           <button type="button" data-filter="rank2" aria-pressed="false">2位</button>
           <button type="button" data-filter="rank1" aria-pressed="false">1位</button>
+          <button type="button" data-filter="deleted" aria-pressed="false">削除済み</button>
         </div>
         <div class="segmented type-filter" id="type-filter" aria-label="データ種別フィルタ"></div>
         <select id="sort" aria-label="ソート">
@@ -104,6 +106,8 @@
           <button id="selection-toggle" class="button" type="button" aria-controls="grid" aria-pressed="false">選択する</button>
           <button id="selection-select-all" class="button selection-only" type="button" hidden>すべて選択</button>
           <button id="selection-clear" class="button selection-only" type="button" hidden>選択解除</button>
+          <button id="selection-delete" class="button selection-only danger" type="button" hidden>選択中を削除</button>
+          <button id="selection-restore" class="button selection-only" type="button" hidden>選択中を復元</button>
         </div>
         <div class="copy-actions">
           <button id="copy-visible" class="button" type="button">表示中をコピー</button>
@@ -112,6 +116,7 @@
       </div>
 
       <p class="result-line"><span id="visible-count">0</span>件表示<span id="copy-status"></span></p>
+      <p id="result-status" class="status" role="status" aria-live="polite"></p>
       <section id="grid" class="grid" aria-label="解析結果"></section>
     </section>
   </main>

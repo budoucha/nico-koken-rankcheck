@@ -26,8 +26,8 @@
   },
   "F006": {
     "level": "contract",
-    "checks": ["filter-search-sort-semantics", "contribution-sort-semantics"],
-    "notes": "UI may differ, but visible item semantics must match, including rank and contribution sorting."
+    "checks": ["filter-search-sort-semantics", "contribution-sort-semantics", "lite-deleted-filter-semantics"],
+    "notes": "Shared rank, type, search and sort semantics must match. Lite additionally applies F018 deletion visibility before shared operations."
   },
   "F007": {
     "level": "platform",
@@ -51,8 +51,8 @@
   },
   "F011": {
     "level": "platform",
-    "checks": ["viewer-result-operations", "selection-mode-controls"],
-    "notes": "Node writes HTML; lite renders DOM. Result operations and selection controls must stay equivalent."
+    "checks": ["viewer-result-operations", "selection-mode-controls", "lite-delete-restore-controls"],
+    "notes": "Node writes HTML; lite renders DOM. Result operations and selection controls must stay equivalent, with Lite-only deletion/restoration covered by F018."
   },
   "F012": {
     "level": "exception-allowed",
@@ -71,8 +71,8 @@
   },
   "F015": {
     "level": "platform",
-    "checks": ["lite-localstorage-result-history", "raw-html-not-persisted", "latest-history-open-on-startup", "startup-without-history-or-storage"],
-    "notes": "Lite persists parsed results only and opens the newest saved entry on startup. test/compatibility/history.test.js covers startup with multiple entries, empty or invalid history, and unavailable storage."
+    "checks": ["lite-localstorage-result-history", "raw-html-not-persisted", "latest-history-open-on-startup", "startup-without-history-or-storage", "current-history-deletion-isolation", "legacy-history-without-deletions"],
+    "notes": "Lite persists parsed results only and opens the newest saved entry on startup. history.test.js covers startup and storage failures, active history identity, and old entries without deletion metadata."
   },
   "F016": {
     "level": "platform",
@@ -93,5 +93,10 @@
     "level": "platform",
     "checks": ["selection-mode-controls", "selected-clipboard-copy", "visible-selection-lifecycle"],
     "notes": "Both viewers must support visible-only selection, bulk selection controls, and selected-item clipboard copying without changing result schemas or history data."
+  },
+  "F018": {
+    "level": "platform",
+    "checks": ["lite-delete-restore-controls", "lite-deleted-filter-semantics", "current-history-deletion-isolation", "legacy-history-without-deletions", "delete-restore-reopen", "deleted-source-data-retained", "deletion-storage-failure-rollback"],
+    "notes": "test/compatibility/history.test.js exercises deletion and restoration through UI events, history isolation, old entries, retained source data and exports, and persistence failures. Node omission is documented in CAPABILITY_EXCEPTIONS.md."
   }
 }

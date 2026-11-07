@@ -39,6 +39,17 @@ const generate = read(generatePath);
 const index = read(indexPath);
 const app = read(appJsPath);
 
+for (const required of [
+  'id="selection-delete"',
+  'id="selection-restore"',
+  'id="result-status"',
+  'data-filter="deleted"',
+  "選択中を削除",
+  "選択中を復元",
+]) {
+  if (!index.includes(required)) fail(`docs/index.html is missing ${required}`);
+}
+
 if (srcCore !== docsCore) {
   fail("docs/koken-core.js is out of sync with src/core/koken-core.js");
 }

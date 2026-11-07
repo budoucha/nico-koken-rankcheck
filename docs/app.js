@@ -15,6 +15,8 @@
     typeFilter: "all",
     selectionMode: false,
     selectedKeys: new Set(),
+    currentHistoryId: null,
+    deletedKeys: new Set(),
     history: [],
   };
 
@@ -35,6 +37,9 @@
     selectionToggle: document.querySelector("#selection-toggle"),
     selectionSelectAll: document.querySelector("#selection-select-all"),
     selectionClear: document.querySelector("#selection-clear"),
+    selectionDelete: document.querySelector("#selection-delete"),
+    selectionRestore: document.querySelector("#selection-restore"),
+    resultStatus: document.querySelector("#result-status"),
     copyVisible: document.querySelector("#copy-visible"),
     copySelected: document.querySelector("#copy-selected"),
     downloadContents: document.querySelector("#download-contents"),
@@ -59,6 +64,11 @@
     if (message) {
       copyStatusTimer = setTimeout(() => setCopyStatus(""), 3000);
     }
+  }
+
+  function setResultStatus(message, isError = false) {
+    elements.resultStatus.textContent = message;
+    elements.resultStatus.classList.toggle("error", isError);
   }
 
   function readHistory() {
@@ -144,8 +154,10 @@
   function saveCurrentResultToHistory() {
     try {
       const entry = historyEntryFromState();
-      state.history = [entry, ...state.history.filter((item) => item.id !== entry.id)].slice(0, HISTORY_LIMIT);
-      writeHistory(state.history);
+      const history = [entry, ...state.history.filter((item) => item.id !== entry.id)].slice(0, HISTORY_LIMIT);
+      writeHistory(history);
+      state.history = history;
+      state.currentHistoryId = entry.id;
       renderHistory();
       return true;
     } catch {
@@ -153,6 +165,12 @@
       renderHistory();
       return false;
     }
+  }
+
+  function deletedKeysForEntry(entry) {
+    const itemKeys = new Set(entry.items.map((item) => item.key));
+    return new Set((Array.isArray(entry.deletedKeys) ? entry.deletedKeys : [])
+      .filter((key) => typeof key === "string" && itemKeys.has(key)));
   }
 
   function loadHistoryEntry(entry) {
@@ -167,10 +185,48 @@
       typeFilter: "all",
       selectionMode: false,
       selectedKeys: new Set(),
+      currentHistoryId: entry.id,
+      deletedKeys: deletedKeysForEntry(entry),
     });
+    setResultStatus("");
     resetControls();
     renderAll();
     setStatus("履歴を開きました。");
+  }
+
+  function setSelectedItemsDeleted(deleted) {
+    if (!state.selectionMode) return;
+    if (deleted && state.rankFilter === "deleted") return;
+    if (!deleted && state.rankFilter !== "deleted") return;
+    const selected = new Set(selectedVisibleItems().map((item) => item.key));
+    if (!selected.size) return;
+
+    const history = readHistory();
+    const entry = history.find((item) => item.id === state.currentHistoryId);
+    if (!entry) {
+      setResultStatus("対象の履歴が保存されていません。HTMLを再分析してから操作してください。", true);
+      return;
+    }
+    const deletedKeys = deletedKeysForEntry(entry);
+    for (const key of selected) {
+      if (deleted) deletedKeys.add(key);
+      else deletedKeys.delete(key);
+    }
+    const updated = { ...entry, deletedKeys: [...deletedKeys] };
+    const nextHistory = history.map((item) => item.id === entry.id ? updated : item);
+    try {
+      writeHistory(nextHistory);
+    } catch {
+      setResultStatus("履歴に保存できなかったため、削除・復元は反映していません。", true);
+      return;
+    }
+    state.history = nextHistory;
+    state.deletedKeys = deletedKeys;
+    state.selectedKeys.clear();
+    renderHistory();
+    renderSummary();
+    renderGrid();
+    setResultStatus(`${selected.size}件を${deleted ? "削除" : "復元"}して履歴に保存しました。${deleted ? "「削除済み」から復元できます。" : ""}`);
   }
 
   function formatHistoryDate(value) {
@@ -221,6 +277,9 @@
     meta.className = "history-meta";
     const summary = entry.summary || {};
     meta.textContent = `全件 ${summary.total || 0} / 4位以下 ${summary.missing || 0}`;
+    const deletedKeys = deletedKeysForEntry(entry);
+    const deletedCount = entry.items.filter((item) => deletedKeys.has(item.key)).length;
+    if (deletedCount) meta.textContent += ` / 削除済み ${deletedCount}`;
     main.append(title, meta);
 
     const buttons = document.createElement("div");
@@ -331,13 +390,15 @@
   }
 
   function renderSummary() {
-    const total = state.items.length;
-    const inTop3 = state.items.filter((item) => item.inTop3).length;
-    const notInTop3 = state.missingRows.length;
+    const activeItems = state.items.filter((item) => !state.deletedKeys.has(item.key));
+    const total = activeItems.length;
+    const inTop3 = activeItems.filter((item) => item.inTop3).length;
+    const notInTop3 = total - inTop3;
     elements.summary.replaceChildren(
-      summaryItem("全件", total),
+      summaryItem("通常一覧", total),
       summaryItem("3位以内", inTop3),
       summaryItem("4位以下", notInTop3),
+      summaryItem("削除済み", state.items.length - total),
       summaryItem("順位抽出", state.top3Ranks.size),
     );
     elements.sourceSummary.textContent = `contents: ${state.contentsNames.join(" / ")} / reward: ${state.rewardName}`;
@@ -450,6 +511,10 @@
     elements.selectionSelectAll.hidden = !state.selectionMode;
     elements.selectionClear.hidden = !state.selectionMode;
     elements.copySelected.hidden = !state.selectionMode;
+    elements.selectionDelete.hidden = !state.selectionMode || state.rankFilter === "deleted";
+    elements.selectionRestore.hidden = !state.selectionMode || state.rankFilter !== "deleted";
+    elements.selectionDelete.disabled = state.selectedKeys.size === 0;
+    elements.selectionRestore.disabled = state.selectedKeys.size === 0;
   }
 
   function setSelectionMode(enabled) {
@@ -464,13 +529,9 @@
   }
 
   function renderGrid() {
-    const visible = core.applyResultOperations(state.items, {
-      rankFilter: state.rankFilter,
-      typeFilter: state.typeFilter,
-      query: elements.search.value,
-      sort: elements.sort.value,
-    });
+    const visible = visibleItems();
     if (state.selectionMode) pruneSelectionToVisibleItems(visible);
+    renderSelectionUi();
     elements.visibleCount.textContent = String(visible.length);
     elements.grid.replaceChildren();
     if (!visible.length) {
@@ -494,8 +555,10 @@
   }
 
   function visibleItems() {
-    return core.applyResultOperations(state.items, {
-      rankFilter: state.rankFilter,
+    const showDeleted = state.rankFilter === "deleted";
+    const items = state.items.filter((item) => state.deletedKeys.has(item.key) === showDeleted);
+    return core.applyResultOperations(items, {
+      rankFilter: showDeleted ? "all" : state.rankFilter,
       typeFilter: state.typeFilter,
       query: elements.search.value,
       sort: elements.sort.value,
@@ -571,7 +634,10 @@
         typeFilter: "all",
         selectionMode: false,
         selectedKeys: new Set(),
+        currentHistoryId: null,
+        deletedKeys: new Set(),
       });
+      setResultStatus("");
       resetControls();
       renderAll();
       setStatus(saveCurrentResultToHistory() ? "分析が完了しました。履歴に保存しました。" : "分析が完了しました。履歴には保存できませんでした。");
@@ -616,6 +682,9 @@
     renderGrid();
   });
 
+  elements.selectionDelete.addEventListener("click", () => setSelectedItemsDeleted(true));
+  elements.selectionRestore.addEventListener("click", () => setSelectedItemsDeleted(false));
+
   elements.grid.addEventListener("change", (event) => {
     const checkbox = event.target.closest(".selection-checkbox");
     if (!checkbox || !state.selectionMode) return;
@@ -625,6 +694,7 @@
     if (checkbox.checked) state.selectedKeys.add(key);
     else state.selectedKeys.delete(key);
     card.classList.toggle("is-selected", checkbox.checked);
+    renderSelectionUi();
   });
 
   elements.sort.addEventListener("change", renderGrid);
@@ -652,9 +722,11 @@
     }
     const removeButton = event.target.closest("[data-history-remove]");
     if (!removeButton) return;
-    state.history = state.history.filter((item) => item.id !== removeButton.dataset.historyRemove);
     try {
-      writeHistory(state.history);
+      const history = state.history.filter((item) => item.id !== removeButton.dataset.historyRemove);
+      writeHistory(history);
+      state.history = history;
+      if (state.currentHistoryId === removeButton.dataset.historyRemove) state.currentHistoryId = null;
     } catch {
       setStatus("履歴を更新できませんでした。", true);
     }
@@ -664,9 +736,10 @@
   elements.clearHistory.addEventListener("click", () => {
     if (!state.history.length) return;
     if (!window.confirm("履歴をすべて削除しますか？")) return;
-    state.history = [];
     try {
       localStorage.removeItem(HISTORY_KEY);
+      state.history = [];
+      state.currentHistoryId = null;
     } catch {
       setStatus("履歴を削除できませんでした。", true);
     }
