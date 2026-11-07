@@ -236,7 +236,7 @@ async function testDeletionAndRestoration() {
   assert.deepEqual(saved(get, "current").contentsRows, original.contentsRows);
   assert.deepEqual(saved(get, "current").top3Ranks, original.top3Ranks);
   assert.equal(get("#selection-delete").disabled, true);
-  assert.match(textIn(get("#summary")), /通常一覧\s+3.*削除済み\s+1/);
+  assert.match(textIn(get("#summary")), /通常一覧\s+3.*除外済み\s+1/);
 
   await search(get, "");
   await typeFilter(get, "all");
@@ -275,7 +275,7 @@ async function testDeletionAndRestoration() {
   assert.deepEqual(saved(get, "current").deletedKeys, []);
   await filter(get, "missing");
   assert.deepEqual(keys(get), ["video:123", "seiga:789"]);
-  assert.match(get("#result-status").textContent, /復元して履歴に保存/);
+  assert.match(get("#result-status").textContent, /一覧に戻しました。履歴に保存/);
   assert.deepEqual(saved(get, "current").items, original.items);
   const restored = start(get.storage.raw);
   assert.deepEqual(keys(restored), ["video:123", "seiga:789"]);

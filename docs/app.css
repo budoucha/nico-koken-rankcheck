@@ -108,11 +108,6 @@ h2 {
   color: #fff;
 }
 
-.button.danger {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-
 .export-note {
   flex-basis: 100%;
   margin: 0;

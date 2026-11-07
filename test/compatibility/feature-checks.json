@@ -97,6 +97,6 @@
   "F018": {
     "level": "platform",
     "checks": ["lite-delete-restore-controls", "lite-deleted-filter-semantics", "current-history-deletion-isolation", "legacy-history-without-deletions", "delete-restore-reopen", "deleted-source-data-retained", "deletion-storage-failure-rollback"],
-    "notes": "test/compatibility/history.test.js exercises deletion and restoration through UI events, history isolation, old entries, retained source data and exports, and persistence failures. Node omission is documented in CAPABILITY_EXCEPTIONS.md."
+    "notes": "history.test.js exercises exclusion/restoration through UI events, history isolation, old entries, retained source data and exports, and persistence failures. check-lite-static.js checks 一覧から除外 / 除外済み / 一覧に戻す labels. The existing deletedKeys field remains compatible. Node omission is documented in CAPABILITY_EXCEPTIONS.md."
   }
 }

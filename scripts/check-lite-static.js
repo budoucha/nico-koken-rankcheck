@@ -44,8 +44,9 @@ for (const required of [
   'id="selection-restore"',
   'id="result-status"',
   'data-filter="deleted"',
-  "選択中を削除",
-  "選択中を復元",
+  "選択中を一覧から除外",
+  "選択中を一覧に戻す",
+  "除外済み",
 ]) {
   if (!index.includes(required)) fail(`docs/index.html is missing ${required}`);
 }

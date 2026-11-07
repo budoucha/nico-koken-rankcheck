@@ -217,7 +217,7 @@
     try {
       writeHistory(nextHistory);
     } catch {
-      setResultStatus("履歴に保存できなかったため、削除・復元は反映していません。", true);
+      setResultStatus("履歴に保存できなかったため、一覧の変更は反映していません。", true);
       return;
     }
     state.history = nextHistory;
@@ -226,7 +226,7 @@
     renderHistory();
     renderSummary();
     renderGrid();
-    setResultStatus(`${selected.size}件を${deleted ? "削除" : "復元"}して履歴に保存しました。${deleted ? "「削除済み」から復元できます。" : ""}`);
+    setResultStatus(`${selected.size}件を${deleted ? "一覧から除外しました" : "一覧に戻しました"}。履歴に保存しました。${deleted ? "「除外済み」から一覧に戻せます。" : ""}`);
   }
 
   function formatHistoryDate(value) {
@@ -279,7 +279,7 @@
     meta.textContent = `全件 ${summary.total || 0} / 4位以下 ${summary.missing || 0}`;
     const deletedKeys = deletedKeysForEntry(entry);
     const deletedCount = entry.items.filter((item) => deletedKeys.has(item.key)).length;
-    if (deletedCount) meta.textContent += ` / 削除済み ${deletedCount}`;
+    if (deletedCount) meta.textContent += ` / 除外済み ${deletedCount}`;
     main.append(title, meta);
 
     const buttons = document.createElement("div");
@@ -398,7 +398,7 @@
       summaryItem("通常一覧", total),
       summaryItem("3位以内", inTop3),
       summaryItem("4位以下", notInTop3),
-      summaryItem("削除済み", state.items.length - total),
+      summaryItem("除外済み", state.items.length - total),
       summaryItem("順位抽出", state.top3Ranks.size),
     );
     elements.sourceSummary.textContent = `contents: ${state.contentsNames.join(" / ")} / reward: ${state.rewardName}`;
