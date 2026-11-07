@@ -142,6 +142,18 @@ h2 {
   margin: 0;
 }
 
+.result-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex-basis: 100%;
+}
+
+.result-export label {
+  font-size: 13px;
+}
+
 #result-status:not(:empty) {
   margin: 0 0 12px;
 }

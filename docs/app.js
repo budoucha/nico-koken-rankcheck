@@ -46,6 +46,8 @@
     downloadContents: document.querySelector("#download-contents"),
     downloadMissing: document.querySelector("#download-missing"),
     downloadRanks: document.querySelector("#download-ranks"),
+    downloadResult: document.querySelector("#download-result"),
+    exportExclusions: document.querySelector("#export-exclusions"),
     historyList: document.querySelector("#history-list"),
     clearHistory: document.querySelector("#clear-history"),
     exclusionList: document.querySelector("#exclusion-list"),
@@ -136,13 +138,10 @@
     };
   }
 
-  function historyEntryFromState() {
-    const savedAt = new Date().toISOString();
+  function resultSnapshotFromState() {
     const total = state.items.length;
     const inTop3 = state.items.filter((item) => item.inTop3).length;
     return {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      savedAt,
       contentsNames: [...state.contentsNames],
       rewardName: state.rewardName,
       summary: {
@@ -154,6 +153,26 @@
       items: state.items.map(compactItem),
       top3Ranks: [...state.top3Ranks.entries()],
     };
+  }
+
+  function historyEntryFromState() {
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      savedAt: new Date().toISOString(),
+      ...resultSnapshotFromState(),
+    };
+  }
+
+  function resultExportFromState(includeExclusions) {
+    const result = resultSnapshotFromState();
+    const exported = {
+      format: "koken-result",
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      result: { ...result, missingRows: core.createMissingRows(result.items) },
+    };
+    if (includeExclusions) exported.excludedKeys = [...readExcludedKeys()].sort();
+    return exported;
   }
 
   function saveCurrentResultToHistory() {
@@ -822,6 +841,8 @@
     if (state.items.length) {
       renderSummary();
       renderGrid();
+    } else {
+      setStatus(state.exclusionError || "共通除外リストを読み込みました。", Boolean(state.exclusionError));
     }
     setResultStatus(state.exclusionError, Boolean(state.exclusionError));
   }
@@ -856,6 +877,17 @@
 
   elements.downloadRanks.addEventListener("click", () => {
     downloadText("result-top3-ranks.txt", core.top3RanksText(state.top3Ranks), "text/plain;charset=utf-8");
+  });
+
+  elements.downloadResult.addEventListener("click", () => {
+    try {
+      const exported = resultExportFromState(elements.exportExclusions.checked);
+      downloadText(`result-${exported.exportedAt.replace(/[:.]/g, "-")}.koken-result.json`,
+        `${JSON.stringify(exported, null, 2)}\n`, "application/json;charset=utf-8");
+      setResultStatus("解析結果JSONのダウンロードを開始しました。");
+    } catch {
+      setResultStatus("解析結果JSONを出力できませんでした。共通除外リストを含める場合は、その保存データも確認してください。", true);
+    }
   });
 
   state.history = readHistory();

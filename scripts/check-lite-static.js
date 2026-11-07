@@ -47,6 +47,8 @@ for (const required of [
   'id="exclusion-count"',
   'id="exclusion-status"',
   'id="reload-exclusions"',
+  'id="download-result"',
+  'id="export-exclusions" type="checkbox" checked',
   'data-filter="deleted"',
   "選択中を一覧から除外",
   "選択中を一覧に戻す",

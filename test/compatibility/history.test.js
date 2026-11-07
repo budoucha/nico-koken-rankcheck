@@ -80,6 +80,7 @@ function start(raw, storageUnavailable = false, allowWrites = false, exclusionsR
     failHistoryWrites: false, failExclusionWrites: false, failExclusionReads: false, ...options,
   };
   const downloads = [];
+  const downloadNames = [];
   const copied = [];
   const document = {
     body: new Element(),
@@ -93,7 +94,11 @@ function start(raw, storageUnavailable = false, allowWrites = false, exclusionsR
       return elements.get(selector);
     },
     querySelectorAll: (selector) => selector === "[data-filter]" ? filters : [],
-    createElement: () => new Element(),
+    createElement: (tag) => {
+      const element = new Element();
+      if (tag === "a") element.click = () => downloadNames.push(element.download);
+      return element;
+    },
     createDocumentFragment: () => new Element(),
   };
   document.querySelector("#results").classes.add("hidden");
@@ -106,7 +111,11 @@ function start(raw, storageUnavailable = false, allowWrites = false, exclusionsR
     navigator: { clipboard: { writeText: async (text) => copied.push(text) } },
     Blob,
     URL: {
-      createObjectURL(blob) { downloads.push(blob); return "blob:test"; },
+      createObjectURL(blob) {
+        if (storage.failDownload) throw new Error("Download unavailable");
+        downloads.push(blob);
+        return "blob:test";
+      },
       revokeObjectURL() {},
     },
     setTimeout: () => 1,
@@ -137,7 +146,7 @@ function start(raw, storageUnavailable = false, allowWrites = false, exclusionsR
     },
   });
   const get = (selector) => document.querySelector(selector);
-  return Object.assign(get, { storage, filters, downloads, copied, window });
+  return Object.assign(get, { storage, filters, downloads, downloadNames, copied, window });
 }
 
 function entry(id, savedAt) {
@@ -433,6 +442,11 @@ async function testNewAnalysis() {
     assert.deepEqual(keys(get), []);
     assert.equal(get("#selection-toggle").attributes["aria-pressed"], "false");
     const before = get.storage.raw;
+    await click(get, "#download-result");
+    const exported = JSON.parse(await get.downloads[0].text());
+    assert.deepEqual(exported.result.items.map((item) => item.key), ["video:999"]);
+    assert.deepEqual(exported.excludedKeys, ["video:999"]);
+    assert.equal(get.storage.raw, before);
     get.storage.failHistoryWrites = false;
     await filter(get, "deleted");
     await click(get, "#selection-toggle");
@@ -450,6 +464,16 @@ async function testNewAnalysis() {
       assert.equal(keys(get).length, 0);
     }
   }
+
+  // Retaining only ten snapshots must not evict shared preferences with the eleventh analysis.
+  const histories = Array.from({ length: 10 }, (_, i) => fixture(`snapshot-${i}`));
+  const get = start(JSON.stringify(histories), false, true, '["video:123"]');
+  get("#contents-files").files = [{ name: "new.html", text: async () => contents }];
+  get("#reward-file").files = [{ name: "reward.html", text: async () => reward }];
+  await click(get, "#analyze");
+  assert.equal(JSON.parse(get.storage.raw).length, 10);
+  assert.equal(saved(get, "snapshot-9"), undefined);
+  assert.deepEqual(excluded(get), ["video:123"]);
 }
 
 async function testExclusionMigration() {
@@ -501,6 +525,12 @@ async function testExclusionMigration() {
   assert.equal(unreadable.storage.writes, 0);
   assert.equal(unreadable.storage.exclusionsRaw, '["seiga:123"]');
   assert.match(unreadable("#result-status").textContent, /読み込めません/);
+  const recovered = start(null, false, true, "{");
+  assert.ok(recovered("#status").classes.has("error"));
+  recovered.storage.exclusionsRaw = "[]";
+  await click(recovered, "#reload-exclusions");
+  assert.equal(recovered("#status").classes.has("error"), false);
+  assert.match(recovered("#status").textContent, /読み込みました/);
 }
 
 async function testKeysWithoutHistory() {
@@ -521,6 +551,85 @@ async function testKeysWithoutHistory() {
   assert.deepEqual(keys(result), []);
 }
 
+async function testResultExport() {
+  const original = { ...fixture("current"), deletedKeys: ["seiga:789"] };
+  original.items[0].thumbnail = `data:image/png;base64,${"A".repeat(20001)}`;
+  original.items[1].thumbnail = "https://example.com/thumb.jpg";
+  original.items[2].thumbnail = "data:image/png;base64,AAAA";
+  const get = start(JSON.stringify([original]), false, true, '["video:999","seiga:123"]');
+  const historyBefore = get.storage.raw;
+  const exclusionsBefore = get.storage.exclusionsRaw;
+  assert.equal(get("#export-exclusions").checked, true);
+  await filter(get, "rank3");
+  await click(get, "#selection-toggle");
+  await search(get, "C video");
+  get("#sort").value = "contribution-desc";
+  await get("#sort").fire("change");
+  await click(get, "#download-result");
+  assert.equal(get.downloads.length, 1);
+  assert.equal(get.downloads[0].type, "application/json;charset=utf-8");
+  assert.match(get.downloadNames[0], /\.koken-result\.json$/);
+  const exported = JSON.parse(await get.downloads[0].text());
+  assert.deepEqual(Object.keys(exported).sort(), ["excludedKeys", "exportedAt", "format", "result", "schemaVersion"]);
+  assert.equal(exported.format, "koken-result");
+  assert.equal(exported.schemaVersion, 1);
+  assert.ok(Number.isFinite(Date.parse(exported.exportedAt)));
+  assert.deepEqual(exported.excludedKeys, ["seiga:123", "video:999"]);
+  assert.deepEqual(exported.result.items.map((item) => item.key), original.items.map((item) => item.key));
+  assert.deepEqual(exported.result.top3Ranks, original.top3Ranks);
+  assert.deepEqual(exported.result.contentsNames, original.contentsNames);
+  assert.equal(exported.result.rewardName, original.rewardName);
+  assert.deepEqual(exported.result.summary, original.summary);
+  assert.deepEqual(exported.result.missingRows, core.createMissingRows(original.items));
+  assert.equal(exported.result.items[0].thumbnail, core.CONTENT_TYPES.video.remoteThumb("123"));
+  assert.equal(exported.result.items[1].thumbnail, original.items[1].thumbnail);
+  assert.equal(exported.result.items[2].thumbnail, original.items[2].thumbnail);
+  assert.deepEqual(exported.result.items.map((item) => item.globalIndex), original.items.map((item) => item.globalIndex));
+  for (const field of ["selectedKeys", "selectionMode", "rankFilter", "typeFilter", "query", "sort", "rawHtml", "deletedKeys"]) {
+    assert.equal(Object.hasOwn(exported.result, field), false);
+  }
+  assert.equal(core.csvText(core.CONTENTS_CSV_HEADER, exported.result.contentsRows), core.csvText(core.CONTENTS_CSV_HEADER, original.contentsRows));
+  assert.equal(core.csvText(core.MISSING_CSV_HEADER, exported.result.missingRows), core.csvText(core.MISSING_CSV_HEADER, core.createMissingRows(original.items)));
+  assert.equal(core.spreadsheetText(exported.result.items), core.spreadsheetText(original.items));
+  for (const rankFilter of ["all", "missing", "top3", "rank1", "rank2", "rank3"]) {
+    const options = { rankFilter, typeFilter: "video", query: "video", sort: "contribution-desc" };
+    assert.deepEqual(core.applyResultOperations(exported.result.items, options).map((item) => item.key),
+      core.applyResultOperations(original.items, options).map((item) => item.key));
+  }
+  assert.equal(get.storage.raw, historyBefore);
+  assert.equal(get.storage.exclusionsRaw, exclusionsBefore);
+  assert.match(get("#result-status").textContent, /ダウンロードを開始/);
+
+  // An unchecked option omits preferences entirely, even if storage is unreadable.
+  get("#export-exclusions").checked = false;
+  get.storage.failExclusionReads = true;
+  await click(get, "#download-result");
+  const without = JSON.parse(await get.downloads[1].text());
+  assert.equal(Object.hasOwn(without, "excludedKeys"), false);
+  assert.deepEqual(without.result, exported.result);
+  get.storage.failExclusionReads = false;
+  get("#export-exclusions").checked = true;
+  get.storage.exclusionsRaw = "[]";
+  await click(get, "#download-result");
+  assert.deepEqual(JSON.parse(await get.downloads[2].text()).excludedKeys, []);
+  for (const invalid of ["{", "null", "{}", '["invalid"]']) {
+    get.storage.exclusionsRaw = invalid;
+    await click(get, "#download-result");
+    assert.equal(get.downloads.length, 3);
+    assert.ok(get("#result-status").classes.has("error"));
+    assert.equal(get.storage.exclusionsRaw, invalid);
+  }
+  get.storage.exclusionsRaw = exclusionsBefore;
+  get.storage.failExclusionReads = true;
+  await click(get, "#download-result");
+  assert.equal(get.downloads.length, 3);
+  get.storage.failExclusionReads = false;
+  get.storage.failDownload = true;
+  await click(get, "#download-result");
+  assert.equal(get.downloads.length, 3);
+  assert.match(get("#result-status").textContent, /出力できません/);
+}
+
 async function run() {
   for (const deletedKeys of [undefined, null, {}, "video:123", [null, 2, "unknown"]]) {
     const legacy = { ...fixture("legacy"), deletedKeys };
@@ -537,6 +646,7 @@ async function run() {
   await testNewAnalysis();
   await testExclusionMigration();
   await testKeysWithoutHistory();
-  console.log("Lite history and common exclusion tests OK");
+  await testResultExport();
+  console.log("Lite history, common exclusion and result export tests OK");
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

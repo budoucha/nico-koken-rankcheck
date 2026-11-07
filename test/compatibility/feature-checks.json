@@ -98,5 +98,10 @@
     "level": "platform",
     "checks": ["lite-delete-restore-controls", "lite-deleted-filter-semantics", "common-exclusion-keys-only", "latest-history-only-migration", "empty-common-list-authoritative", "corrupt-exclusion-list-no-fallback", "history-deletion-preserves-exclusions", "keys-without-result-data", "cross-tab-exclusion-refresh", "deleted-source-data-retained", "deletion-storage-failure-rollback"],
     "notes": "history.test.js exercises common exclusions, latest-entry-only migration, authoritative empty lists, malformed/unreadable storage, history independence, key-only management and cross-tab refresh. Existing per-history deletedKeys is consulted only when creating an absent common list. Node omission is documented in CAPABILITY_EXCEPTIONS.md."
+  },
+  "F019": {
+    "level": "platform",
+    "checks": ["result-json-schema-v1", "full-analysis-export-with-filters", "optional-full-common-exclusion-export", "empty-versus-omitted-exclusions", "no-raw-html-or-ui-state", "bounded-export-thumbnails", "export-without-history-storage", "export-failure-notification"],
+    "notes": "history.test.js exercises JSON downloads with exclusions enabled/disabled, keys absent from the result, malformed storage, full result reconstruction and export failures. The portable format is documented in docs/result-export.md."
   }
 }
