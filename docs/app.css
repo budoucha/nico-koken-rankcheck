@@ -234,6 +234,10 @@ dialog::backdrop {
   letter-spacing: 0;
 }
 
+.bookmarklet-panel > p {
+  margin: 0;
+}
+
 .bookmarklet-action {
   width: fit-content;
   margin-top: 2px;
