@@ -199,11 +199,33 @@ dialog::backdrop {
 }
 
 .input-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
   cursor: pointer;
 }
 
-.input-toggle h2 {
-  display: inline;
+.input-toggle::marker {
+  content: "";
+}
+
+.input-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.input-toggle::before {
+  content: "";
+  width: 0;
+  height: 0;
+  flex: none;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 7px solid currentColor;
+}
+
+.input-inner[open] > .input-toggle::before {
+  transform: rotate(90deg);
 }
 
 .input-grid {
