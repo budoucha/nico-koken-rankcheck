@@ -128,7 +128,10 @@
           <button id="selection-restore" class="button selection-only" type="button" hidden>選択中を一覧に戻す</button>
         </div>
         <div class="copy-actions">
-          <button id="copy-visible" class="button" type="button">表示中をコピー</button>
+          <div class="visible-copy-actions">
+            <button id="copy-visible" class="button" type="button">表示中をコピー</button>
+            <label><input id="copy-include-header" type="checkbox" aria-label="表示中をコピーにヘッダーを含める">ヘッダーを含める</label>
+          </div>
           <button id="copy-selected" class="button selection-only" type="button" hidden>選択中をコピー</button>
         </div>
       </div>

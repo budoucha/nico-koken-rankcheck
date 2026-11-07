@@ -372,6 +372,17 @@ input[type="file"] {
   display: none;
 }
 
+.visible-copy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.visible-copy-actions label {
+  font-size: 13px;
+}
+
 .segmented {
   display: inline-grid;
   grid-column: 1 / -1;

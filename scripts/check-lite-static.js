@@ -38,6 +38,10 @@ const server = read(serverPath);
 const generate = read(generatePath);
 const index = read(indexPath);
 const app = read(appJsPath);
+for (const [name, source] of [["docs/index.html", index], ["generate.js", generate]]) {
+  const checkbox = source.match(/<input\b[^>]*id="copy-include-header"[^>]*>/)?.[0];
+  if (!checkbox || /\bchecked\b/.test(checkbox)) fail(`${name} must expose an unchecked copy header option`);
+}
 const resultFileSource = read(path.join(root, "src/core/result-file.js"));
 if (resultFileSource !== read(path.join(docsDir, "result-file.js"))) fail("docs/result-file.js is out of sync");
 

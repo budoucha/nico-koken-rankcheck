@@ -95,8 +95,8 @@
     return String(value || "").replace(/[\t\r\n]+/g, " ").trim();
   }
 
-  function spreadsheetText(items) {
-    const rows = [SPREADSHEET_HEADER];
+  function spreadsheetText(items, options = {}) {
+    const rows = options.includeHeader === false ? [] : [SPREADSHEET_HEADER];
     for (const item of items) {
       rows.push([
         item.contentId,

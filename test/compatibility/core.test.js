@@ -134,6 +134,12 @@ assert.ok(csv.includes('"テスト&静画"'));
 const tsv = core.spreadsheetText(items);
 assert.ok(tsv.startsWith("id\tタイトル\tコンテンツのURL\t獲得貢\t広告画面のURL"));
 assert.ok(tsv.includes("im11529455\tテスト&静画"));
+const withoutHeader = core.spreadsheetText(items, { includeHeader: false });
+assert.ok(withoutHeader.startsWith("im11529455\tテスト&静画\t"));
+assert.equal(withoutHeader.split("\n").length, items.length);
+assert.equal(core.spreadsheetText([], { includeHeader: false }), "");
+assert.equal(core.spreadsheetText([], { includeHeader: true }), core.SPREADSHEET_HEADER.join("\t"));
+assert.equal(core.spreadsheetText(items, { includeHeader: true }), tsv);
 
 const selectedTsv = core.spreadsheetText(items.filter((item) => item.key === "video:46001796"));
 assert.ok(selectedTsv.startsWith("id\tタイトル\tコンテンツのURL\t獲得貢\t広告画面のURL"));

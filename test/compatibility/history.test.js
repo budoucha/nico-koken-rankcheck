@@ -797,6 +797,92 @@ async function testImportFailures() {
   assert.equal(JSON.parse(unreadableExclusions.storage.raw).length, 2);
 }
 
+async function testVisibleCopyHeader() {
+  const original = fixture("copy");
+  const get = start(JSON.stringify([original]));
+  assert.equal(get("#copy-include-header").checked, false);
+  await filter(get, "all");
+  await search(get, "A video");
+  await click(get, "#copy-visible");
+  assert.equal(get.copied.at(-1), "sm123\tA video\thttps://example.com/video/123\t100\thttps://nicoad.nicovideo.jp/video/publish/sm123");
+  get("#copy-include-header").checked = true;
+  await click(get, "#copy-visible");
+  assert.equal(get.copied.at(-1), core.SPREADSHEET_HEADER.join("\t") + "\n" + core.spreadsheetText([original.items[0]], { includeHeader: false }));
+  await search(get, "no matches");
+  get("#copy-include-header").checked = false;
+  await click(get, "#copy-visible");
+  assert.equal(get.copied.at(-1), "");
+  get("#copy-include-header").checked = true;
+  await click(get, "#copy-visible");
+  assert.equal(get.copied.at(-1), core.SPREADSHEET_HEADER.join("\t"));
+  assert.equal(get.storage.writes, 0);
+}
+
+async function testNodeCopyHeader() {
+  const { generateViewer } = require("../../generate");
+  const items = fixture("node-copy").items.map((item) => ({ ...item, rank: 0, inTop3: false }));
+  const html = generateViewer(items, {
+    total: items.length, inTop3: 0, notInTop3: items.length,
+    contentsPath: "contents.html", rewardPath: "reward.html", contentTypes: [],
+  });
+  assert.doesNotMatch(html.match(/<input[^>]*id="copy-include-header"[^>]*>/)[0], /\bchecked\b/);
+  const copied = [];
+  const elements = new Map();
+  const cards = items.map((item) => {
+    const card = new Element();
+    const checkbox = new Element();
+    card.querySelector = () => checkbox;
+    card.dataset = {
+      index: item.globalIndex, title: item.title.toLowerCase(), id: item.contentId,
+      type: item.type, rank: "0", inTop3: "false", selectionKey: item.key,
+      copyId: item.contentId, copyTitle: item.title, copyUrl: item.url,
+      copyContribution: item.totalContribution, copyNicoadUrl: item.nicoadUrl,
+    };
+    return card;
+  });
+  const document = {
+    body: new Element(),
+    querySelector(selector) {
+      if (["#controls-summary", "#generate-form", "#server-home"].includes(selector)) return null;
+      if (!elements.has(selector)) {
+        const element = new Element();
+        element.checked = false;
+        if (selector === "#sort") element.value = "index";
+        elements.set(selector, element);
+      }
+      return elements.get(selector);
+    },
+    querySelectorAll: (selector) => selector === ".card" ? cards : [],
+  };
+  const grid = document.querySelector("#grid");
+  grid.querySelectorAll = () => grid.children.filter((card) => !card.classes.has("hidden"));
+  grid.appendChild = (card) => {
+    grid.children = grid.children.filter((child) => child !== card);
+    grid.children.push(card);
+  };
+  vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], {
+    document, window: { isSecureContext: true }, location: { protocol: "https:" },
+    navigator: { clipboard: { writeText: async (text) => copied.push(text) } },
+    setTimeout: () => 1, clearTimeout() {}, alert: (message) => assert.fail(message),
+  });
+  await document.querySelector("#copy-spreadsheet").fire("click");
+  assert.equal(copied.at(-1), core.spreadsheetText(items, { includeHeader: false }));
+  await document.querySelector("#selection-toggle").fire("click");
+  await document.querySelector("#copy-selected").fire("click");
+  assert.equal(copied.at(-1), core.spreadsheetText(items));
+  document.querySelector("#copy-include-header").checked = true;
+  await document.querySelector("#copy-spreadsheet").fire("click");
+  assert.equal(copied.at(-1), core.spreadsheetText(items));
+  document.querySelector("#search").value = "no matches";
+  await document.querySelector("#search").fire("input");
+  document.querySelector("#copy-include-header").checked = false;
+  await document.querySelector("#copy-spreadsheet").fire("click");
+  assert.equal(copied.at(-1), "");
+  document.querySelector("#copy-include-header").checked = true;
+  await document.querySelector("#copy-spreadsheet").fire("click");
+  assert.equal(copied.at(-1), core.SPREADSHEET_HEADER.join("\t"));
+}
+
 async function run() {
   for (const deletedKeys of [undefined, null, {}, "video:123", [null, 2, "unknown"]]) {
     const legacy = { ...fixture("legacy"), deletedKeys };
@@ -816,6 +902,8 @@ async function run() {
   await testResultExport();
   await testResultImport();
   await testImportFailures();
+  await testVisibleCopyHeader();
+  await testNodeCopyHeader();
   console.log("Lite history, common exclusion and result import/export tests OK");
 }
 run().catch((error) => { console.error(error); process.exitCode = 1; });

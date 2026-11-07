@@ -46,8 +46,8 @@
   },
   "F010": {
     "level": "contract",
-    "checks": ["clipboard-tsv-columns", "selected-clipboard-tsv-columns"],
-    "notes": "Clipboard TSV columns should match the CSV-facing result fields for visible and selected visible rows."
+    "checks": ["clipboard-tsv-columns", "selected-clipboard-tsv-columns", "visible-copy-header-option-default-off", "node-and-lite-copy-header-toggle"],
+    "notes": "Both viewers offer an unchecked include-header option for visible-row copy. Core fixtures and UI event tests cover on/off and empty copies; selected-item copy retains its existing header."
   },
   "F011": {
     "level": "platform",

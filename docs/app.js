@@ -50,6 +50,7 @@
     selectionRestore: document.querySelector("#selection-restore"),
     resultStatus: document.querySelector("#result-status"),
     copyVisible: document.querySelector("#copy-visible"),
+    copyIncludeHeader: document.querySelector("#copy-include-header"),
     copySelected: document.querySelector("#copy-selected"),
     downloadContents: document.querySelector("#download-contents"),
     downloadMissing: document.querySelector("#download-missing"),
@@ -939,7 +940,7 @@
   elements.copyVisible.addEventListener("click", async () => {
     try {
       const items = visibleItems();
-      await writeClipboard(core.spreadsheetText(items));
+      await writeClipboard(core.spreadsheetText(items, { includeHeader: elements.copyIncludeHeader.checked }));
       setCopyStatus(`${items.length}件をコピーしました`);
     } catch {
       setCopyStatus("コピーできませんでした");

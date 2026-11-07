@@ -338,6 +338,8 @@ function generateViewer(items, stats) {
       grid-column: 1 / -1;
     }
     .selection-only[hidden] { display: none; }
+    .visible-copy-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .visible-copy-actions label { font-size: 13px; }
     .segmented {
       display: inline-grid;
       grid-template-columns: repeat(6, minmax(76px, 1fr));
@@ -652,7 +654,10 @@ function generateViewer(items, stats) {
         <button class="button selection-only" type="button" id="selection-clear" hidden>選択解除</button>
       </div>
       <div class="copy-actions">
-        <button class="button" type="button" id="copy-spreadsheet">表示中をコピー</button>
+        <div class="visible-copy-actions">
+          <button class="button" type="button" id="copy-spreadsheet">表示中をコピー</button>
+          <label><input id="copy-include-header" type="checkbox" aria-label="表示中をコピーにヘッダーを含める">ヘッダーを含める</label>
+        </div>
         <button class="button selection-only" type="button" id="copy-selected" hidden>選択中をコピー</button>
       </div>
     </div>
@@ -672,6 +677,7 @@ ${cards}
     const sort = document.querySelector("#sort");
     const count = document.querySelector("#visible-count");
     const copyButton = document.querySelector("#copy-spreadsheet");
+    const copyIncludeHeader = document.querySelector("#copy-include-header");
     const copySelectedButton = document.querySelector("#copy-selected");
     const copyStatus = document.querySelector("#copy-status");
     const selectionToggle = document.querySelector("#selection-toggle");
@@ -694,8 +700,8 @@ ${cards}
       return [...grid.querySelectorAll(".card:not(.hidden)")];
     }
 
-    function spreadsheetText(sourceCards = visibleCardsInOrder()) {
-      const rows = [["id", "タイトル", "コンテンツのURL", "獲得貢", "広告画面のURL"]];
+    function spreadsheetText(sourceCards = visibleCardsInOrder(), includeHeader = true) {
+      const rows = includeHeader ? [["id", "タイトル", "コンテンツのURL", "獲得貢", "広告画面のURL"]] : [];
       for (const card of sourceCards) {
         rows.push([
           card.dataset.copyId,
@@ -884,7 +890,7 @@ ${cards}
     copyButton.addEventListener("click", async () => {
       const visibleCount = visibleCardsInOrder().length;
       try {
-        await writeClipboard(spreadsheetText());
+        await writeClipboard(spreadsheetText(visibleCardsInOrder(), copyIncludeHeader.checked));
         setCopyStatus(visibleCount + "件をコピーしました");
       } catch (error) {
         setCopyStatus("コピーできませんでした");
@@ -995,4 +1001,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { main };
+module.exports = { main, generateViewer };

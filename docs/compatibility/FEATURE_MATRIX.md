@@ -35,7 +35,7 @@ Source values:
 | F007 | upload and input selection | platform | required | required | Node accepts uploads and stores files; lite uses File API. Same validation expectations. |
 | F008 | persisted input history | platform | required | optional | Node persists to `input/`; lite may use browser storage only with explicit user consent. |
 | F009 | CSV/TXT export | core | required | required | Same columns and UTF-8 BOM for CSV. Node writes files; lite downloads blobs. |
-| F010 | spreadsheet clipboard copy | core | required | required | Same tab-separated columns for visible rows and selected visible rows. |
+| F010 | spreadsheet clipboard copy | core | required | required | Same tab-separated columns for visible rows and selected visible rows. Both viewers offer a checkbox beside visible-row copy to include the header, unchecked by default. Selected-row copy retains its existing header. The checkbox is temporary UI state, not exported or stored in history. |
 | F011 | result HTML/viewer rendering | platform | required | required | Node generates `result.html`; lite renders in the current page. Both expose equivalent result operations, including visible item selection and selected-item copy. |
 | F012 | local saved thumbnail reuse | platform | required | best-effort | Node can copy local files. Lite can only use user-selected files or visible URLs. |
 | F013 | remote/video thumbnail fallback | platform | required | best-effort | Lite must tolerate CORS/API failures without breaking analysis. |
